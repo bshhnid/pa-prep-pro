@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PA Prep Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#07091a;color:#eef2ff;font-family:'Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif}
+  input{font-family:inherit}
+  button{font-family:inherit}
+  a{font-family:inherit}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+// ── CONFIG ── swap these with your real Stripe links when ready
+const CONFIG = {
+  MONTHLY_LINK: "https://buy.stripe.com/YOUR_MONTHLY_LINK",
+  YEARLY_LINK:  "https://buy.stripe.com/YOUR_YEARLY_LINK",
+  FREE_LIMIT: 10,
+};
+
+const SUBJECTS = ["All","Anatomy & Physiology","Pharmacology","Clinical Medicine","Pathophysiology","Medical Ethics & Law"];
+const DIFFS    = ["Easy","Medium","Hard"];
+const SC = {"Anatomy & Physiology":"#00C9A7","Pharmacology":"#845EC2","Clinical Medicine":"#FF6F91","Pathophysiology":"#FFC75F","Medical Ethics & Law":"#4D8AF0"};
+const DC = {Easy:"#00C9A7",Medium:"#FFC75F",Hard:"#FF6F91"};
+
+const store = {
+  get:(k,fb=null)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+
+const QUESTIONS = [
+  {id:1,subject:"Anatomy & Physiology",difficulty:"Medium",question:"Which heart valve separates the left atrium from the left ventricle?",options:["Tricuspid valve","Pulmonary valve","Mitral valve","Aortic valve"],answer:2,explanation:"The mitral (bicuspid) valve separates the left atrium from the left ventricle. It has two leaflets and prevents backflow during ventricular contraction."},
+  {id:2,subject:"Anatomy & Physiology",difficulty:"Hard",question:"Which best describes the role of the juxtaglomerular apparatus?",options:["Filters glucose from filtrate","Regulates GFR via renin secretion","Reabsorbs sodium in collecting duct","Produces erythropoietin"],answer:1,explanation:"The JGA monitors blood pressure and secretes renin when it drops, activating the RAAS cascade to restore perfusion."},
+  {id:3,subject:"Anatomy & Physiology",difficulty:"Easy",question:"Primary function of the sinoatrial (SA) node?",options:["Delay conduction between atria and ventricles","Generate the primary pacemaker impulse","Distribute impulses through ventricular myocardium","Regulate stroke volume"],answer:1,explanation:"The SA node is the heart's natural pacemaker, depolarizing at 60–100 bpm to initiate each cardiac cycle."},
+  {id:4,subject:"Anatomy & Physiology",difficulty:"Medium",question:"The brachial plexus is formed by which spinal nerve roots?",options:["C1–C5","C5–T1","T1–T5","C3–C8"],answer:1,explanation:"The brachial plexus arises from C5–T1, providing motor and sensory innervation to the entire upper extremity."},
+  {id:5,subject:"Anatomy & Physiology",difficulty:"Hard",question:"Which correctly describes the Frank-Starling mechanism?",options:["Increased afterload increases stroke volume","Increased preload stretches myocardial fibers increasing force","Sympathetic stimulation decreases heart rate","Decreased filling time increases cardiac output"],answer:1,explanation:"Increased end-diastolic volume stretches sarcomeres toward optimal length, increasing cross-bridge formation and stroke volume."},
+  {id:6,subject:"Anatomy & Physiology",difficulty:"Easy",question:"Primary muscle driving inspiration at rest?",options:["External intercostals","Scalenes","Diaphragm","Sternocleidomastoid"],answer:2,explanation:"The diaphragm contracts and flattens during inspiration, increasing thoracic volume and driving ~75% of tidal volume."},
+  {id:7,subject:"Anatomy & Physiology",difficulty:"Medium",question:"Primary site of sodium reabsorption in the nephron?",options:["Collecting duct","Thick ascending limb","Proximal convoluted tubule","Distal convoluted tubule"],answer:2,explanation:"The PCT reabsorbs ~67% of filtered sodium via Na/K-ATPase on the basolateral membrane."},
+  {id:8,subject:"Anatomy & Physiology",difficulty:"Hard",question:"Cardiac cycle phase with lowest ventricular volume?",options:["End-diastole","Isovolumetric contraction","End-systole","Rapid ventricular filling"],answer:2,explanation:"End-systole marks the point after ejection when ventricular volume is at its minimum (~50–60 mL at rest)."},
+  {id:9,subject:"Anatomy & Physiology",difficulty:"Easy",question:"Cartilage covering articular surfaces of synovial joints?",options:["Fibrocartilage","Elastic cartilage","Hyaline cartilage","Fibrous cartilage"],answer:2,explanation:"Hyaline cartilage forms articular surfaces, providing a low-friction, shock-absorbing surface for joint movement."},
+  {id:10,subject:"Anatomy & Physiology",difficulty:"Medium",question:"Femoral nerve arises from which lumbar roots?",options:["L1–L3","L2–L4","L3–L5","L4–S1"],answer:1,explanation:"The femoral nerve (L2–L4) innervates the quadriceps and provides sensation to the anterior thigh and medial leg."},
+  {id:11,subject:"Pharmacology",difficulty:"Medium",question:"How do beta-blockers primarily reduce blood pressure?",options:["Block alpha-1 receptors","Decrease HR and CO via beta-1 blockade","Inhibit ACE","Block calcium channels"],answer:1,explanation:"Beta-blockers antagonize catecholamines at beta-1 receptors, reducing chronotropy and inotropy to lower cardiac output."},
+  {id:12,subject:"Pharmacology",difficulty:"Hard",question:"Patient on warfarin starts fluconazole. Expected interaction?",options:["Decreased warfarin via CYP2C9 induction","Increased warfarin via CYP2C9 inhibition","No significant interaction","Decreased absorption via chelation"],answer:1,explanation:"Fluconazole inhibits CYP2C9, raising warfarin levels and increasing bleeding risk. Monitor INR closely."},
+  {id:13,subject:"Pharmacology",difficulty:"Easy",question:"Antidote for acetaminophen overdose?",options:["Flumazenil","Naloxone","N-acetylcysteine","Physostigmine"],answer:2,explanation:"NAC replenishes glutathione, neutralizing the toxic NAPQI metabolite responsible for hepatotoxicity."},
+  {id:14,subject:"Pharmacology",difficulty:"Medium",question:"First-line drug class for type 2 diabetes without contraindications?",options:["Sulfonylureas","SGLT-2 inhibitors","Metformin","GLP-1 agonists"],answer:2,explanation:"Metformin is first-line due to efficacy, safety, low cost, weight neutrality, and cardiovascular benefits."},
+  {id:15,subject:"Pharmacology",difficulty:"Hard",question:"Statins inhibit which enzyme in cholesterol biosynthesis?",options:["Squalene synthase","HMG-CoA reductase","Cholesterol 7α-hydroxylase","PCSK9"],answer:1,explanation:"Statins competitively inhibit HMG-CoA reductase, the rate-limiting step in hepatic cholesterol synthesis."},
+  {id:16,subject:"Pharmacology",difficulty:"Easy",question:"Which agent reverses opioid overdose?",options:["Flumazenil","Naloxone","Atropine","Physostigmine"],answer:1,explanation:"Naloxone (Narcan) is a competitive opioid receptor antagonist reversing respiratory depression and sedation."},
+  {id:17,subject:"Pharmacology",difficulty:"Medium",question:"Mechanism of ACE inhibitors?",options:["Block AT2 receptors","Inhibit conversion of Ang I to Ang II","Stimulate aldosterone","Block beta-1 receptors"],answer:1,explanation:"ACE inhibitors block angiotensin-converting enzyme, preventing Ang II formation, causing vasodilation and lowering BP."},
+  {id:18,subject:"Pharmacology",difficulty:"Hard",question:"Agranulocytosis after starting hyperthyroidism treatment. Most likely drug?",options:["Levothyroxine","Propranolol","Methimazole","Radioactive iodine"],answer:2,explanation:"Methimazole can cause agranulocytosis — a rare but life-threatening side effect. Report fever or sore throat immediately."},
+  {id:19,subject:"Pharmacology",difficulty:"Medium",question:"Antibiotic class inhibiting cell wall synthesis via PBP binding?",options:["Fluoroquinolones","Beta-lactams","Macrolides","Aminoglycosides"],answer:1,explanation:"Beta-lactams covalently bind penicillin-binding proteins, preventing peptidoglycan cross-linking."},
+  {id:20,subject:"Pharmacology",difficulty:"Easy",question:"First-line treatment for anaphylaxis?",options:["Diphenhydramine","Methylprednisolone","Epinephrine 1:1000 IM","Albuterol"],answer:2,explanation:"Epinephrine IM into the anterolateral thigh is first-line, reversing bronchospasm, hypotension, and urticaria."},
+  {id:21,subject:"Clinical Medicine",difficulty:"Medium",question:"ST elevation in II, III, aVF. Which artery is occluded?",options:["LAD","Left circumflex","Right coronary artery","Left main"],answer:2,explanation:"Inferior MI (ST elevation II, III, aVF) is most commonly RCA occlusion, supplying the inferior wall."},
+  {id:22,subject:"Clinical Medicine",difficulty:"Easy",question:"Most common cause of CAP in healthy adults?",options:["H. influenzae","S. pneumoniae","Mycoplasma pneumoniae","Legionella"],answer:1,explanation:"Streptococcus pneumoniae accounts for the majority of typical CAP cases across all age groups."},
+  {id:23,subject:"Clinical Medicine",difficulty:"Hard",question:"Most classic physical exam finding for appendicitis?",options:["Rovsing's sign","McBurney's point tenderness","Psoas sign","Obturator sign"],answer:1,explanation:"McBurney's point (1/3 from ASIS to umbilicus) tenderness is the most classic finding for appendicitis."},
+  {id:24,subject:"Clinical Medicine",difficulty:"Medium",question:"COPD exacerbation: PaCO2 65, pH 7.28. Primary disturbance?",options:["Metabolic acidosis","Respiratory alkalosis","Respiratory acidosis","Mixed acidosis"],answer:2,explanation:"Elevated PaCO2 with low pH = respiratory acidosis from hypoventilation and CO2 retention."},
+  {id:25,subject:"Clinical Medicine",difficulty:"Easy",question:"First-line treatment for uncomplicated UTI in women?",options:["Amoxicillin","Ciprofloxacin","Nitrofurantoin or TMP-SMX","Cephalexin"],answer:2,explanation:"Nitrofurantoin and TMP-SMX are first-line per IDSA guidelines. Fluoroquinolones reserved for complicated infections."},
+  {id:26,subject:"Clinical Medicine",difficulty:"Medium",question:"Butterfly rash + joint pain + photosensitivity + positive ANA. Diagnosis?",options:["Rheumatoid arthritis","SLE","Sjogren syndrome","Dermatomyositis"],answer:1,explanation:"SLE: malar rash, photosensitivity, arthritis, positive ANA. ≥4 ACR criteria confirm diagnosis."},
+  {id:27,subject:"Clinical Medicine",difficulty:"Easy",question:"Electrolyte abnormality causing peaked T waves on ECG?",options:["Hyponatremia","Hypercalcemia","Hyperkalemia","Hypomagnesemia"],answer:2,explanation:"Hyperkalemia causes peaked T waves — earliest ECG change. Rising K+ → PR prolongation → wide QRS → sine wave."},
+  {id:28,subject:"Clinical Medicine",difficulty:"Hard",question:"Sepsis-3 defines sepsis as?",options:["SIRS + infection","Life-threatening organ dysfunction from dysregulated host response (SOFA ≥2)","Fever + leukocytosis + positive cultures","Hypotension + elevated lactate"],answer:1,explanation:"Sepsis-3 (2016): life-threatening organ dysfunction from dysregulated host response, SOFA score increase ≥2."},
+  {id:29,subject:"Clinical Medicine",difficulty:"Medium",question:"Wells score assesses pre-test probability of?",options:["CAP severity","DVT","ACS","Pulmonary hypertension"],answer:1,explanation:"Wells DVT score uses clinical variables (cancer, immobilization, calf tenderness) to guide D-dimer vs imaging workup."},
+  {id:30,subject:"Clinical Medicine",difficulty:"Hard",question:"Gold standard for diagnosing pulmonary embolism?",options:["V/Q scan","CTPA","D-dimer","Pulmonary angiography"],answer:3,explanation:"Pulmonary angiography is the historical gold standard, though CTPA (~95% sensitivity, ~98% specificity) has replaced it."},
+  {id:31,subject:"Pathophysiology",difficulty:"Medium",question:"Mechanism of hyperglycemia in Type 1 diabetes?",options:["Peripheral insulin resistance","Autoimmune destruction of beta cells","Excess glucagon","Decreased renal threshold"],answer:1,explanation:"Type 1 DM: autoimmune T-cell destruction of pancreatic beta cells → absolute insulin deficiency."},
+  {id:32,subject:"Pathophysiology",difficulty:"Hard",question:"Earliest compensatory mechanism in hemorrhagic shock?",options:["Renal renin release","Increased ADH","Baroreceptor-mediated sympathetic activation","Erythropoietin release"],answer:2,explanation:"Baroreceptors immediately trigger sympathetic discharge — the fastest compensatory response to hemorrhage."},
+  {id:33,subject:"Pathophysiology",difficulty:"Easy",question:"Left heart failure most commonly leads to?",options:["Pulmonary embolism","Pulmonary edema","Pneumothorax","Pleural empyema"],answer:1,explanation:"Left heart failure increases pulmonary venous pressure → fluid leaks into alveoli and interstitium."},
+  {id:34,subject:"Pathophysiology",difficulty:"Medium",question:"Primary cytokines mediating fever?",options:["TNF-alpha only","IL-4 and IL-10","IL-1β and IL-6","IFN-gamma"],answer:2,explanation:"IL-1β and IL-6 stimulate the hypothalamus to produce PGE2 via COX-2, raising the thermoregulatory set point."},
+  {id:35,subject:"Pathophysiology",difficulty:"Hard",question:"Thrombocytopenia + MAHA + fever + renal failure + neuro symptoms. Diagnosis?",options:["DIC","ITP","TTP","HUS"],answer:2,explanation:"Classic pentad of TTP: caused by ADAMTS13 deficiency → ultra-large vWF → platelet microthrombi → multi-organ injury."},
+  {id:36,subject:"Pathophysiology",difficulty:"Medium",question:"Mechanism of Cushing syndrome?",options:["Primary adrenal insufficiency","Excess cortisol from any cause","Excess aldosterone","21-hydroxylase deficiency"],answer:1,explanation:"Cushing = chronic excess cortisol from exogenous steroids, pituitary adenoma, adrenal tumor, or ectopic ACTH."},
+  {id:37,subject:"Pathophysiology",difficulty:"Easy",question:"Irreversible cell death with swelling and membrane rupture?",options:["Apoptosis","Necrosis","Autophagy","Anoikis"],answer:1,explanation:"Necrosis: uncontrolled death with membrane disruption, releasing intracellular contents and triggering inflammation."},
+  {id:38,subject:"Pathophysiology",difficulty:"Hard",question:"Mechanism of secondary hyperparathyroidism in CKD?",options:["Decreased PTH degradation","Phosphate retention → hypocalcemia + decreased calcitriol","Increased gut Ca absorption","Primary parathyroid hyperplasia"],answer:1,explanation:"CKD → phosphate retention + decreased calcitriol → hypocalcemia + loss of negative feedback → elevated PTH."},
+  {id:39,subject:"Pathophysiology",difficulty:"Medium",question:"Pathogenesis of atherosclerosis?",options:["Smooth muscle hypertrophy","Endothelial injury → LDL oxidation → foam cells → fibrous plaque","Primary clot on intact endothelium","Elastic artery calcification"],answer:1,explanation:"Atherosclerosis: endothelial injury → LDL oxidation → macrophage foam cells → fibrous plaque → CAD/stroke/PVD."},
+  {id:40,subject:"Pathophysiology",difficulty:"Easy",question:"Type of hypersensitivity causing anaphylaxis?",options:["Type II","Type III","Type I (IgE-mediated)","Type IV"],answer:2,explanation:"Anaphylaxis = Type I. IgE on mast cells binds antigen → degranulation → histamine/leukotriene release → systemic vasodilation."},
+  {id:41,subject:"Medical Ethics & Law",difficulty:"Easy",question:"Ethical principle requiring action in the patient's best interest?",options:["Autonomy","Beneficence","Non-maleficence","Justice"],answer:1,explanation:"Beneficence obligates clinicians to act for the patient's benefit, balanced with autonomy when patients make suboptimal decisions."},
+  {id:42,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Competent adult refuses life-saving transfusion for religious reasons. Action?",options:["Override and transfuse","Respect refusal and document","Obtain court order","Consult psychiatry"],answer:1,explanation:"Competent adults may refuse any treatment under autonomy. Document thoroughly. Overriding constitutes battery."},
+  {id:43,subject:"Medical Ethics & Law",difficulty:"Hard",question:"HIPAA-permitted disclosure without authorization?",options:["Records to employer","Reporting gunshot wound to law enforcement per state law","HIV status to spouse","Records to pharma for marketing"],answer:1,explanation:"HIPAA permits law enforcement disclosure for certain injuries (e.g. gunshot wounds) as required by state law."},
+  {id:44,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Patient lacks capacity, no advance directive. Who is surrogate?",options:["Treating physician","Ethics committee","Next of kin per state law hierarchy","Any family member"],answer:2,explanation:"Most states have legal hierarchy (spouse → adult children → parents → siblings). Surrogate applies substituted judgment."},
+  {id:45,subject:"Medical Ethics & Law",difficulty:"Easy",question:"Four elements of medical malpractice?",options:["Intent, harm, causation, damages","Duty, breach, causation, damages","Negligence, intent, foreseeability, injury","Standard of care, error, harm, reporting"],answer:1,explanation:"The 4 Ds: Duty (provider-patient relationship), Dereliction (breach of standard of care), Direct causation, Damages."},
+  {id:46,subject:"Medical Ethics & Law",difficulty:"Hard",question:"16-year-old requests contraception without parental consent. Approach?",options:["Refuse until parent present","Refer to gynecologist","Provide care — minors can consent to reproductive health in most states","Notify parents"],answer:2,explanation:"Most states allow minors to consent to reproductive health, STI testing, and contraception under mature minor doctrine."},
+  {id:47,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Valid informed consent requires?",options:["Patient signature","Disclosure of diagnosis, treatment, risks, benefits, alternatives in understandable language","Verbal agreement","Next-of-kin consent"],answer:1,explanation:"Valid informed consent: disclosure, comprehension, voluntariness (no coercion), and decision-making capacity."},
+  {id:48,subject:"Medical Ethics & Law",difficulty:"Hard",question:"Doctrine allowing emergency treatment of unconscious patient when no surrogate available?",options:["Therapeutic privilege","Implied consent","Substituted judgment","Advance directive"],answer:1,explanation:"Implied consent assumes a reasonable person would consent to emergency treatment, permitting action when delay causes harm."},
+  {id:49,subject:"Medical Ethics & Law",difficulty:"Easy",question:"Justice in medical ethics refers to?",options:["Acting in patient's best interest","Do no harm","Fair distribution of resources and equitable treatment","Respecting autonomy"],answer:2,explanation:"Justice: fair, equitable patient treatment and appropriate allocation of healthcare resources without discrimination."},
+  {id:50,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Terminal patient requests lethal medication in state with legal PAS. First step?",options:["No living family","Capacity + terminal diagnosis + repeated voluntary requests","Ethics board approval","All curative options attempted"],answer:1,explanation:"Legal PAS requires: terminal diagnosis (≤6 months), decision-making capacity, repeated voluntary requests, second-provider evaluation."},
+];
+
+async function generateAIQuestions(subject, difficulty, count, used=[]) {
+  const subjectCtx = subject==="All"
+    ? "any PA school subject (Anatomy & Physiology, Pharmacology, Clinical Medicine, Pathophysiology, or Medical Ethics & Law)"
+    : subject;
+  const recent = used.slice(-6).map(q=>q.question).join("; ");
+  const prompt = `You are an expert PA school educator. Generate ${count} unique multiple-choice questions for PA board exam prep.
+Subject: ${subjectCtx}
+Difficulty: ${difficulty&&difficulty!=="All"?difficulty:"mix of Easy, Medium, Hard"}
+Do NOT repeat: ${recent}
+Return ONLY valid JSON array, no markdown:
+[{"subject":"exact subject","difficulty":"Easy|Medium|Hard","question":"text","options":["A","B","C","D"],"answer":0,"explanation":"2-3 sentence explanation"}]
+answer = 0-based index. Board-style clinical questions. Valid JSON only.`;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await res.json();
+    const text = data.content?.find(b=>b.type==="text")?.text||"[]";
+    const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+    return parsed.map((q,i)=>({...q,id:Date.now()+i,ai:true}));
+  } catch(e) { return []; }
+}
+
+// ── STYLES ──
+const S = {
+  page:{minHeight:"100vh",background:"#07091a",backgroundImage:"radial-gradient(ellipse at 10% 10%,rgba(0,201,167,0.07) 0%,transparent 50%),radial-gradient(ellipse at 90% 90%,rgba(132,94,194,0.07) 0%,transparent 50%)",display:"flex",flexDirection:"column",alignItems:"center",paddingBottom:80},
+  wrap:{width:"100%",maxWidth:600,padding:"0 20px"},
+  card:{background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:20},
+  inp:{width:"100%",padding:"13px 16px",borderRadius:11,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#eef2ff",fontSize:14,outline:"none",boxSizing:"border-box"},
+  primaryBtn:{width:"100%",padding:"16px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:15,fontWeight:700,boxShadow:"0 6px 24px rgba(0,201,167,0.3)",transition:"all 0.15s"},
+  ghostBtn:{width:"100%",padding:"14px",borderRadius:12,cursor:"pointer",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#6a7a9a",fontSize:14},
+  label:{fontSize:10,letterSpacing:5,color:"#4a5a7a",textTransform:"uppercase",fontFamily:"monospace",marginBottom:10,display:"block"},
+};
+
+const Logo = ()=><span style={{fontWeight:700,fontSize:17,background:"linear-gradient(135deg,#00C9A7,#845EC2)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>PA Prep Pro</span>;
+
+const Pill = ({children,color="#00C9A7"})=><span style={{fontSize:10,padding:"3px 10px",borderRadius:99,background:`${color}18`,color,fontFamily:"monospace",letterSpacing:1}}>{children}</span>;
+
+const PBar = ({value,max,color="#00C9A7",h=3})=>(
+  <div style={{height:h,background:"rgba(255,255,255,0.05)",borderRadius:99}}>
+    <div style={{height:"100%",width:`${Math.min((value/max)*100,100)}%`,background:color,borderRadius:99,transition:"width 0.6s ease"}}/>
+  </div>
+);
+
+const FBtn = ({label,active,color,onClick})=>(
+  <button onClick={onClick} style={{padding:"7px 13px",borderRadius:20,fontSize:12,cursor:"pointer",transition:"all 0.15s",
+    border:active?`1px solid ${color}`:"1px solid rgba(255,255,255,0.07)",
+    background:active?`${color}22`:"rgba(255,255,255,0.03)",color:active?color:"#5a6d94"}}>
+    {label}
+  </button>
+);
+
+// ── MAIN APP ──
+function App() {
+  const [screen,setScreen]   = React.useState("landing");
+  const [authMode,setAuthMode] = React.useState("signup");
+  const [form,setForm]       = React.useState({name:"",email:"",password:""});
+  const [formErr,setFormErr] = React.useState("");
+  const [user,setUser]       = React.useState(()=>store.get("paprep_user"));
+  const [prog,setProg]       = React.useState(()=>store.get("paprep_prog")||{totalAnswered:0,totalCorrect:0,sessions:0,subjectStats:{}});
+  const [bank,setBank]       = React.useState([...QUESTIONS]);
+  const [queue,setQueue]     = React.useState([]);
+  const [qIdx,setQIdx]       = React.useState(0);
+  const [picked,setPicked]   = React.useState(null);
+  const [score,setScore]     = React.useState(0);
+  const [answers,setAnswers] = React.useState([]);
+  const [streak,setStreak]   = React.useState(0);
+  const [bestStreak,setBest] = React.useState(0);
+  const [stats,setStats]     = React.useState({});
+  const [subj,setSubj]       = React.useState("All");
+  const [diff,setDiff]       = React.useState("All");
+  const [animIn,setAnimIn]   = React.useState(true);
+  const [loading,setLoading] = React.useState(false);
+  const [loadMsg,setLoadMsg] = React.useState("");
+  const [bgFill,setBgFill]   = React.useState(false);
+
+  const q = queue[qIdx];
+  const isPro = user?.pro||false;
+  const hitLimit = !isPro && prog.totalAnswered >= CONFIG.FREE_LIMIT;
+  const overallPct = prog.totalAnswered ? Math.round((prog.totalCorrect/prog.totalAnswered)*100) : 0;
+
+  React.useEffect(()=>{store.set("paprep_prog",prog);},[prog]);
+  React.useEffect(()=>{if(user)store.set("paprep_user",user);},[user]);
+
+  // background AI fill
+  React.useEffect(()=>{
+    if(bank.length<120&&!bgFill){
+      setBgFill(true);
+      Promise.all(SUBJECTS.slice(1).flatMap(s=>DIFFS.map(d=>generateAIQuestions(s,d,5,bank))))
+        .then(r=>{const nq=r.flat().map((q,i)=>({...q,id:Date.now()+i}));setBank(b=>[...b,...nq]);})
+        .finally(()=>setBgFill(false));
+    }
+  },[bank.length,bgFill]);
+
+  const handleAuth = ()=>{
+    if(!form.email||!form.password){setFormErr("Please fill in all fields.");return;}
+    if(authMode==="signup"&&!form.name){setFormErr("Please enter your name.");return;}
+    const u={name:form.name||form.email.split("@")[0],email:form.email,pro:false};
+    setUser(u); setFormErr(""); setScreen("dashboard");
+  };
+
+  const logout = ()=>{store.set("paprep_user",null);setUser(null);setScreen("landing");};
+
+  const activatePro = ()=>{
+    const u={...user,pro:true};
+    setUser(u); store.set("paprep_user",u);
+  };
+
+  const startQuiz = async ()=>{
+    if(hitLimit){setScreen("paywall");return;}
+    setLoading(true); setLoadMsg("Loading questions…");
+    try{
+      let pool = bank.filter(q=>(subj==="All"||q.subject===subj)&&(diff==="All"||q.difficulty===diff)).sort(()=>Math.random()-0.5).slice(0,10);
+      if(pool.length<10){
+        setLoadMsg("Generating with AI…");
+        const ai = await generateAIQuestions(subj,diff,10-pool.length+4,bank);
+        const nq = ai.map((q,i)=>({...q,id:Date.now()+i}));
+        setBank(b=>[...b,...nq]);
+        pool=[...pool,...nq].slice(0,10);
+      }
+      setQueue(pool);setQIdx(0);setPicked(null);setScore(0);setAnswers([]);setStreak(0);setBest(0);
+      setAnimIn(false);
+      setTimeout(()=>{setAnimIn(true);setScreen("quiz");},80);
+    }catch(e){setLoadMsg("Error — try again.");setTimeout(()=>setScreen("dashboard"),2000);}
+    finally{setLoading(false);setLoadMsg("");}
+  };
+
+  const handlePick = (idx)=>{
+    if(picked!==null||!q)return;
+    setPicked(idx);
+    const ok=idx===q.answer;
+    const ns=ok?streak+1:0;
+    setStreak(ns);if(ns>bestStreak)setBest(ns);
+    if(ok)setScore(s=>s+1);
+    setAnswers(a=>[...a,{ok,subject:q.subject}]);
+    setProg(p=>{
+      const ss={...(p.subjectStats||{})};
+      if(!ss[q.subject])ss[q.subject]={answered:0,correct:0};
+      ss[q.subject].answered++;if(ok)ss[q.subject].correct++;
+      return{...p,totalAnswered:p.totalAnswered+1,totalCorrect:p.totalCorrect+(ok?1:0),subjectStats:ss};
+    });
+    if(!isPro&&prog.totalAnswered+1>=CONFIG.FREE_LIMIT&&qIdx+1<queue.length){
+      setTimeout(()=>setScreen("paywall"),1400);
+    }
+  };
+
+  const nextQ = ()=>{
+    if(qIdx+1>=queue.length){
+      const st={};
+      SUBJECTS.slice(1).forEach(s=>{const sub=answers.filter(a=>a.subject===s);if(sub.length)st[s]={correct:sub.filter(a=>a.ok).length,total:sub.length};});
+      setStats(st);setProg(p=>({...p,sessions:p.sessions+1}));setScreen("results");
+    }else{
+      setAnimIn(false);
+      setTimeout(()=>{setQIdx(i=>i+1);setPicked(null);setAnimIn(true);},180);
+    }
+  };
+
+  const pct = queue.length?Math.round((score/queue.length)*100):0;
+
+  // ── LANDING ──
+  if(screen==="landing") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <nav style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"22px 0"}}>
+          <Logo/>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setAuthMode("login");setScreen("auth");}} style={{padding:"8px 18px",borderRadius:20,background:"transparent",border:"1px solid rgba(255,255,255,0.1)",color:"#8a9dc0",fontSize:13,cursor:"pointer"}}>Log in</button>
+            <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"8px 18px",borderRadius:20,background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",border:"none"}}>Start free</button>
+          </div>
+        </nav>
+
+        <div style={{textAlign:"center",padding:"52px 0 44px"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,letterSpacing:5,color:"#00C9A7",textTransform:"uppercase",fontFamily:"monospace",background:"rgba(0,201,167,0.08)",border:"1px solid rgba(0,201,167,0.2)",borderRadius:99,padding:"5px 16px",marginBottom:24}}>
+            ✦ Built for PA students, by a PA student
+          </div>
+          <h1 style={{fontSize:"clamp(2.4rem,7vw,3.8rem)",fontWeight:700,margin:"0 0 20px",lineHeight:1.1,background:"linear-gradient(145deg,#ffffff 0%,#b0c8ff 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+            Ace your PA school<br/>exams and boards
+          </h1>
+          <p style={{color:"#5a6d94",fontSize:16,lineHeight:1.8,maxWidth:400,margin:"0 auto 36px"}}>
+            Adaptive AI-powered quizzes across all 5 core PA school subjects. Infinite questions. Detailed clinical explanations.
+          </p>
+          <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"18px 44px",borderRadius:14,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:17,fontWeight:700,boxShadow:"0 8px 36px rgba(0,201,167,0.32)"}}>
+            Start free — 10 questions on us →
+          </button>
+          <div style={{marginTop:12,fontSize:12,color:"#2a3a5a"}}>No credit card · Upgrade anytime</div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:44}}>
+          {[["50+","Seed questions"],["∞","AI generated"],["5","Core subjects"]].map(([n,l])=>(
+            <div key={l} style={{...S.card,textAlign:"center",padding:"18px 10px"}}>
+              <div style={{fontSize:26,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
+              <div style={{fontSize:11,color:"#4a5a7a",marginTop:5}}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:44}}>
+          {[["🧠","AI Question Engine","Infinite board-style questions generated on demand. Never repeats."],
+            ["📊","Progress Tracking","Performance by subject, streaks, and accuracy across every session."],
+            ["⚡","Instant Explanations","Detailed clinical explanation with every single answer."],
+            ["🎯","Difficulty Filters","Easy, Medium, or Hard — match your current study phase."]].map(([icon,title,desc])=>(
+            <div key={title} style={S.card}>
+              <div style={{fontSize:22,marginBottom:8}}>{icon}</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#c0ccee",marginBottom:6}}>{title}</div>
+              <div style={{fontSize:12,color:"#4a5a7a",lineHeight:1.6}}>{desc}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:44}}>
+          <div style={S.card}>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:8,fontFamily:"monospace"}}>FREE</div>
+            <div style={{fontSize:32,fontWeight:700,color:"#dde6ff"}}>$0</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:18}}>forever</div>
+            {["10 questions total","All 5 subjects","Full explanations"].map(f=>(
+              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:7,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
+            ))}
+          </div>
+          <div style={{...S.card,border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.04)",position:"relative"}}>
+            <div style={{position:"absolute",top:-11,right:12,fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700}}>POPULAR</div>
+            <div style={{fontSize:11,color:"#00C9A7",marginBottom:8,fontFamily:"monospace"}}>PRO</div>
+            <div style={{fontSize:32,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:18}}>/mo · or $99/yr</div>
+            {["Unlimited AI questions","Progress tracking","Mock timed exams","All subjects + filters"].map(f=>(
+              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:7,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{...S.card,textAlign:"center",borderColor:"rgba(0,201,167,0.2)",background:"rgba(0,201,167,0.04)",padding:32,marginBottom:32}}>
+          <h3 style={{margin:"0 0 8px",fontSize:20,color:"#dde6ff"}}>Ready to start?</h3>
+          <p style={{color:"#4a5a7a",fontSize:14,margin:"0 0 20px"}}>Join PA students using AI to crush their boards.</p>
+          <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"16px 36px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:15,fontWeight:700,boxShadow:"0 4px 20px rgba(0,201,167,0.28)"}}>
+            Create free account →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── AUTH ──
+  if(screen==="auth") return (
+    <div style={S.page}>
+      <div style={{...S.wrap,maxWidth:420}}>
+        <div style={{textAlign:"center",padding:"48px 0 28px"}}>
+          <button onClick={()=>setScreen("landing")} style={{background:"none",border:"none",color:"#4a5a7a",fontSize:13,cursor:"pointer",marginBottom:20}}>← Back</button>
+          <div style={{marginBottom:8}}><Logo/></div>
+          <h2 style={{fontSize:20,fontWeight:700,color:"#dde6ff",margin:"8px 0 4px"}}>{authMode==="login"?"Welcome back":"Create your account"}</h2>
+          <p style={{color:"#4a5a7a",fontSize:13}}>{authMode==="login"?"Sign in to continue":"Start with 10 free questions"}</p>
+        </div>
+        <div style={{...S.card,padding:24}}>
+          {authMode==="signup"&&(
+            <div style={{marginBottom:14}}>
+              <span style={S.label}>Full Name</span>
+              <input style={S.inp} placeholder="Your name" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
+            </div>
+          )}
+          <div style={{marginBottom:14}}>
+            <span style={S.label}>Email</span>
+            <input style={S.inp} type="email" placeholder="you@email.com" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
+          </div>
+          <div style={{marginBottom:20}}>
+            <span style={S.label}>Password</span>
+            <input style={S.inp} type="password" placeholder="••••••••" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
+          </div>
+          {formErr&&<div style={{fontSize:12,color:"#FF6F91",marginBottom:12,textAlign:"center"}}>{formErr}</div>}
+          <button onClick={handleAuth} style={S.primaryBtn}>{authMode==="login"?"Sign in →":"Create account →"}</button>
+          <div style={{textAlign:"center",marginTop:14,fontSize:12,color:"#4a5a7a"}}>
+            {authMode==="login"?"Don't have an account? ":"Already have an account? "}
+            <span style={{color:"#00C9A7",cursor:"pointer"}} onClick={()=>setAuthMode(m=>m==="login"?"signup":"login")}>
+              {authMode==="login"?"Sign up":"Sign in"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── LOADING ──
+  if(loading) return (
+    <div style={{...S.page,justifyContent:"center"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,minHeight:"80vh",justifyContent:"center"}}>
+        <div style={{width:44,height:44,borderRadius:"50%",border:"3px solid rgba(0,201,167,0.15)",borderTopColor:"#00C9A7",animation:"spin 0.8s linear infinite"}}/>
+        <div style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{loadMsg}</div>
+      </div>
+    </div>
+  );
+
+  // ── PAYWALL ──
+  if(screen==="paywall") return (
+    <div style={S.page}>
+      <div style={{...S.wrap,maxWidth:480}}>
+        <div style={{textAlign:"center",padding:"56px 0 28px"}}>
+          <div style={{fontSize:52,marginBottom:16}}>🔒</div>
+          <h2 style={{fontSize:24,fontWeight:700,color:"#dde6ff",margin:"0 0 10px"}}>You've used your {CONFIG.FREE_LIMIT} free questions</h2>
+          <p style={{color:"#4a5a7a",fontSize:14,lineHeight:1.8,margin:"0 auto 32px",maxWidth:360}}>Upgrade to PA Prep Pro for unlimited AI-generated questions and everything you need to dominate your boards.</p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+          <div style={{...S.card,padding:24,textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:8,fontFamily:"monospace"}}>MONTHLY</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:20}}>/month</div>
+            <a href={CONFIG.MONTHLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro}
+              style={{display:"block",padding:"12px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#dde6ff",fontSize:13,textDecoration:"none",textAlign:"center"}}>
+              Get Monthly →
+            </a>
+          </div>
+          <div style={{...S.card,padding:24,textAlign:"center",border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.05)",position:"relative"}}>
+            <div style={{position:"absolute",top:-11,left:"50%",transform:"translateX(-50%)",fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 12px",borderRadius:99,fontWeight:700,whiteSpace:"nowrap"}}>BEST VALUE</div>
+            <div style={{fontSize:11,color:"#00C9A7",marginBottom:8,fontFamily:"monospace"}}>YEARLY</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#dde6ff"}}>$99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:20}}>/year · save 45%</div>
+            <a href={CONFIG.YEARLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro}
+              style={{display:"block",padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",textAlign:"center"}}>
+              Get Yearly →
+            </a>
+          </div>
+        </div>
+        <div style={{...S.card,marginBottom:20}}>
+          <span style={S.label}>Everything in Pro</span>
+          {["Unlimited AI-generated questions","All 5 subjects + difficulty filters","Detailed progress tracking","Timed mock exam mode","New content every session"].map(f=>(
+            <div key={f} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+              <span style={{color:"#00C9A7",fontSize:14}}>✓</span>
+              <span style={{fontSize:13,color:"#7a8db0"}}>{f}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:11,color:"#2a3a5a",textAlign:"center",marginBottom:16}}>Secure payment via Stripe · Cancel anytime · Instant access</div>
+        <button onClick={()=>setScreen("dashboard")} style={S.ghostBtn}>← Back to dashboard</button>
+      </div>
+    </div>
+  );
+
+  // ── DASHBOARD ──
+  if(screen==="dashboard") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"22px 0"}}>
+          <Logo/>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {isPro
+              ?<span style={{fontSize:10,padding:"4px 10px",borderRadius:99,background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontFamily:"monospace"}}>PRO ✦</span>
+              :<button onClick={()=>setScreen("paywall")} style={{padding:"7px 16px",borderRadius:20,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:12,fontWeight:700}}>Upgrade</button>
+            }
+            <button onClick={logout} style={{background:"none",border:"none",color:"#4a5a7a",fontSize:12,cursor:"pointer"}}>Log out</button>
+          </div>
+        </div>
+
+        <div style={{marginBottom:24}}>
+          <span style={S.label}>Welcome back</span>
+          <h2 style={{fontSize:"clamp(1.5rem,4vw,2rem)",fontWeight:700,color:"#dde6ff"}}>Hey, {user?.name?.split(" ")[0]} 👋</h2>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
+          {[[prog.totalAnswered,"Answered"],[prog.totalCorrect,"Correct"],[`${overallPct}%`,"Accuracy"]].map(([n,l])=>(
+            <div key={l} style={{...S.card,textAlign:"center",padding:"14px 8px"}}>
+              <div style={{fontSize:20,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
+              <div style={{fontSize:11,color:"#4a5a7a",marginTop:4}}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {!isPro&&(
+          <div style={{...S.card,marginBottom:20,borderColor:hitLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:12,color:"#8a9dc0"}}>Free questions used</span>
+              <span style={{fontSize:12,color:hitLimit?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>{Math.min(prog.totalAnswered,CONFIG.FREE_LIMIT)}/{CONFIG.FREE_LIMIT}</span>
+            </div>
+            <PBar value={prog.totalAnswered} max={CONFIG.FREE_LIMIT} color={hitLimit?"#FF6F91":"#FFC75F"}/>
+            {hitLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:8,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
+          </div>
+        )}
+
+        <div style={{marginBottom:16}}>
+          <span style={S.label}>Subject</span>
+          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+            {SUBJECTS.map(s=><FBtn key={s} label={s} active={subj===s} color={s==="All"?"#00C9A7":SC[s]} onClick={()=>setSubj(s)}/>)}
+          </div>
+        </div>
+
+        <div style={{marginBottom:28}}>
+          <span style={S.label}>Difficulty</span>
+          <div style={{display:"flex",gap:7}}>
+            {["All",...DIFFS].map(d=><FBtn key={d} label={d} active={diff===d} color={d==="All"?"#a8c0ff":DC[d]} onClick={()=>setDiff(d)}/>)}
+          </div>
+        </div>
+
+        <button onClick={startQuiz} style={S.primaryBtn}>{hitLimit?"🔒 Upgrade to Continue":"Begin Quiz →"}</button>
+
+        {Object.keys(prog.subjectStats||{}).length>0&&(
+          <div style={{...S.card,marginTop:24}}>
+            <span style={S.label}>Performance by Subject</span>
+            {Object.entries(prog.subjectStats).map(([s,{answered,correct}])=>(
+              <div key={s} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
+                  <span style={{fontSize:12,color:SC[s],fontFamily:"monospace"}}>{correct}/{answered} ({Math.round(correct/answered*100)}%)</span>
+                </div>
+                <PBar value={correct} max={answered} color={SC[s]}/>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {bgFill&&<div style={{textAlign:"center",marginTop:16,fontSize:11,color:"#2a3a5a",fontFamily:"monospace"}}>⚡ AI expanding bank… ({bank.length} ready)</div>}
+      </div>
+    </div>
+  );
+
+  // ── QUIZ ──
+  if(screen==="quiz"&&q) return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0 8px"}}>
+          <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
+          <div style={{display:"flex",gap:14,alignItems:"center"}}>
+            {streak>=2&&<span style={{fontSize:12,color:"#FFC75F",fontFamily:"monospace"}}>🔥{streak}</span>}
+            <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{qIdx+1}/{queue.length}</span>
+            <span style={{fontSize:12,color:"#00C9A7",fontFamily:"monospace"}}>{score}✓</span>
+          </div>
+        </div>
+
+        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:24}}>
+          <div style={{height:"100%",width:`${(qIdx/queue.length)*100}%`,background:"linear-gradient(90deg,#00C9A7,#845EC2)",borderRadius:99,transition:"width 0.5s"}}/>
+        </div>
+
+        <div style={{opacity:animIn?1:0,transform:animIn?"translateY(0)":"translateY(14px)",transition:"all 0.28s ease"}}>
+          <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
+            <Pill color={SC[q.subject]}>{q.subject}</Pill>
+            <Pill color={DC[q.difficulty]}>{q.difficulty}</Pill>
+            {q.ai&&<Pill color="#a8c0ff">AI ✦</Pill>}
+          </div>
+
+          <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.8,marginBottom:22,color:"#dde6ff"}}>{q.question}</div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:9}}>
+            {q.options.map((opt,idx)=>{
+              const isSel=picked===idx,isCorr=idx===q.answer;
+              let bg="rgba(255,255,255,0.03)",border="1px solid rgba(255,255,255,0.07)",color="#8a9dc0",icon="";
+              if(picked!==null){
+                if(isCorr){bg="rgba(0,201,167,0.1)";border="1px solid rgba(0,201,167,0.5)";color="#00C9A7";icon="✓ ";}
+                else if(isSel){bg="rgba(255,111,145,0.1)";border="1px solid rgba(255,111,145,0.5)";color="#FF6F91";icon="✗ ";}
+              }
+              return(
+                <button key={idx} onClick={()=>handlePick(idx)} style={{background:bg,border,borderRadius:11,padding:"13px 16px",color,textAlign:"left",cursor:picked!==null?"default":"pointer",fontSize:14,lineHeight:1.5,transition:"all 0.18s"}}>
+                  <span style={{fontFamily:"monospace",marginRight:8,opacity:0.35,fontSize:12}}>{String.fromCharCode(65+idx)}.</span>{icon}{opt}
+                </button>
+              );
+            })}
+          </div>
+
+          {picked!==null&&(
+            <div style={{marginTop:18,...S.card,borderColor:"rgba(168,192,255,0.1)",animation:"fadeUp 0.25s ease"}}>
+              <div style={{fontSize:10,letterSpacing:3,color:picked===q.answer?"#00C9A7":"#FF6F91",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>
+                {picked===q.answer?"✓ Correct":"✗ Incorrect"} — Explanation
+              </div>
+              <p style={{color:"#7a8db0",fontSize:13,lineHeight:1.8,margin:0}}>{q.explanation}</p>
+            </div>
+          )}
+
+          {picked!==null&&(
+            <button onClick={nextQ} style={{...S.primaryBtn,background:"linear-gradient(135deg,#845EC2,#6a44aa)",boxShadow:"0 4px 20px rgba(132,94,194,0.28)",marginTop:14}}>
+              {qIdx+1>=queue.length?"View Results →":"Next Question →"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── RESULTS ──
+  if(screen==="results") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{textAlign:"center",padding:"48px 0 28px"}}>
+          <div style={{fontSize:52,marginBottom:10}}>{pct>=80?"🏆":pct>=60?"📈":"📚"}</div>
+          <span style={S.label}>Session Complete</span>
+          <div style={{fontSize:"clamp(3.5rem,12vw,5.5rem)",fontWeight:700,lineHeight:1,
+            background:pct>=80?"linear-gradient(135deg,#00C9A7,#00ffd5)":pct>=60?"linear-gradient(135deg,#FFC75F,#ffe0a0)":"linear-gradient(135deg,#FF6F91,#ffb0c0)",
+            WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{pct}%</div>
+          <div style={{color:"#4a5a7a",fontSize:14,marginTop:6}}>{score}/{queue.length} correct</div>
+          {bestStreak>=3&&<div style={{color:"#FFC75F",fontSize:12,marginTop:6,fontFamily:"monospace"}}>🔥 Best streak: {bestStreak}</div>}
+          <div style={{color:"#2a3a5a",fontSize:11,marginTop:4,fontFamily:"monospace"}}>{prog.sessions} sessions · {prog.totalAnswered} total questions</div>
+        </div>
+
+        {Object.keys(stats).length>0&&(
+          <div style={{...S.card,marginBottom:20}}>
+            <span style={S.label}>This Session</span>
+            {Object.entries(stats).map(([s,{correct,total}])=>(
+              <div key={s} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
+                  <span style={{fontSize:12,color:SC[s],fontFamily:"monospace"}}>{correct}/{total}</span>
+                </div>
+                <PBar value={correct} max={total} color={SC[s]}/>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <button onClick={startQuiz} style={{...S.primaryBtn,flex:1}}>Try Again</button>
+          <button onClick={()=>setScreen("dashboard")} style={{...S.ghostBtn,flex:1}}>Dashboard</button>
+        </div>
+
+        {!isPro&&(
+          <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:24}}>
+            <div style={{fontSize:14,color:"#00C9A7",marginBottom:4,fontWeight:700}}>💡 Unlock unlimited questions</div>
+            <div style={{fontSize:12,color:"#4a5a7a",lineHeight:1.7,marginBottom:14}}>PA Prep Pro · $14.99/mo or $99/yr</div>
+            <button onClick={()=>setScreen("paywall")} style={{padding:"12px 28px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>
+              Upgrade to Pro →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
