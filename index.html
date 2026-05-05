@@ -17,7 +17,8 @@ input,button,select,textarea{font-family:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
-@keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
 </style>
 </head>
 <body>
@@ -32,12 +33,40 @@ const CONFIG = {
   ANTHROPIC_KEY: "YOUR_ANTHROPIC_API_KEY_HERE",
 };
 
+// ─── LEVELS ───────────────────────────────────────────────────────────────────
+const LEVELS = [
+  { id:"undergrad",  label:"Undergrad",       icon:"🎓", desc:"Pre-PA foundation — science basics, A&P, intro concepts",        color:"#00C9A7" },
+  { id:"didactic",   label:"PA Didactic",     icon:"📚", desc:"Classroom year — pathophysiology, pharmacology, clinical medicine", color:"#4D8AF0" },
+  { id:"clinical",   label:"PA Clinical",     icon:"🏥", desc:"Rotation year — applied clinical reasoning, patient management",   color:"#845EC2" },
+  { id:"boards",     label:"Board Prep",      icon:"🎯", desc:"PANCE/PANRE — high-yield board topics, full clinical vignettes",   color:"#FF6F91" },
+];
+
+// ─── LEARN DELIVERY METHODS ───────────────────────────────────────────────────
+const LEARN_METHODS = [
+  { id:"lesson",    icon:"📖", label:"Lesson + Practice",     desc:"AI teaches the concept, then tests you with questions",          color:"#00C9A7" },
+  { id:"guide",     icon:"📄", label:"Study Guide + Quiz",    desc:"Full AI-generated study guide, then a focused quiz at the end",   color:"#4D8AF0" },
+  { id:"flashcard", icon:"🃏", label:"Concept Cards + Test",  desc:"Key concepts as flashcards, then test your recall",              color:"#845EC2" },
+  { id:"tutor",     icon:"🤖", label:"AI Tutor",              desc:"Conversational learning — ask questions, get explanations",       color:"#FF6F91" },
+];
+
 // ─── QUESTION TYPES ───────────────────────────────────────────────────────────
 const Q_TYPES = [
-  { id:"mc",       label:"Multiple Choice", icon:"🔘", desc:"4 options, pick one",              color:"#00C9A7" },
-  { id:"fitb",     label:"Fill in the Blank",icon:"✏️", desc:"Type the missing word or phrase",  color:"#845EC2" },
-  { id:"free",     label:"Free Response",   icon:"📝", desc:"Open-ended clinical explanation",  color:"#FF6F91" },
-  { id:"mixed",    label:"Mixed",           icon:"🎲", desc:"Random mix of all three types",    color:"#FFC75F" },
+  { id:"mc",    label:"Multiple Choice",  icon:"🔘", desc:"4 options, pick one",             color:"#00C9A7" },
+  { id:"fitb",  label:"Fill in the Blank",icon:"✏️", desc:"Type the missing term",            color:"#845EC2" },
+  { id:"free",  label:"Free Response",   icon:"📝", desc:"Open-ended clinical explanation",  color:"#FF6F91" },
+  { id:"mixed", label:"Mixed",           icon:"🎲", desc:"Random mix of all three",          color:"#FFC75F" },
+];
+
+// ─── STUDY MODES ──────────────────────────────────────────────────────────────
+const STUDY_MODES = [
+  { id:"learn",    icon:"🧠", label:"Learn",          desc:"Study a topic from scratch with AI teaching",    color:"#00C9A7", isLearn:true },
+  { id:"practice", icon:"📝", label:"Practice",       desc:"MC, fill-in-the-blank, or free response",        color:"#4D8AF0" },
+  { id:"infinite", icon:"∞",  label:"Infinite Mode",  desc:"Endless questions, no pressure",                 color:"#845EC2" },
+  { id:"strikes",  icon:"⚡", label:"5 Strikes",       desc:"Miss 5 and it's game over",                      color:"#FF6F91" },
+  { id:"flashcard",icon:"🃏", label:"Flashcards",     desc:"Tap to flip, mark Got It / Still Learning",      color:"#FFC75F" },
+  { id:"exam",     icon:"📋", label:"Practice Exam",  desc:"Timed PANCE, boards, or custom exams",           color:"#FF9F43" },
+  { id:"custom",   icon:"🎯", label:"Custom AI Topic",desc:"Type any topic, AI generates questions",          color:"#a8c0ff" },
+  { id:"lab",      icon:"🔬", label:"Lab & Anatomy",  desc:"Structures, diagrams, identification",            color:"#FF9F43" },
 ];
 
 // ─── DEEP DIVE MODULES ────────────────────────────────────────────────────────
@@ -45,21 +74,21 @@ const DEEP_DIVE_MODULES = [
   {id:"foundations",label:"Foundations of Medicine",icon:"🔬",color:"#00C9A7",desc:"Anatomy, histology, microbiology, immunology, genetics",subtopics:[
     {id:"clinical-anatomy",label:"Clinical Anatomy",desc:"Regional anatomy with clinical correlations"},
     {id:"histology",label:"Histology",desc:"Tissue types, cellular structure, organ histology"},
-    {id:"microbiology",label:"Microbiology",desc:"Bacteria, viruses, fungi, parasites — bugs and drugs"},
-    {id:"immunology",label:"Immunology",desc:"Innate/adaptive immunity, hypersensitivity, immunodeficiency"},
-    {id:"genetics",label:"Genetics",desc:"Inheritance patterns, genetic disorders, chromosomal abnormalities"},
+    {id:"microbiology",label:"Microbiology",desc:"Bacteria, viruses, fungi — bugs and drugs"},
+    {id:"immunology",label:"Immunology",desc:"Innate/adaptive immunity, hypersensitivity"},
+    {id:"genetics",label:"Genetics",desc:"Inheritance patterns, genetic disorders"},
     {id:"biochemistry",label:"Biochemistry",desc:"Metabolism, enzymes, vitamins, inborn errors"},
   ]},
   {id:"clinical-skills",label:"Clinical Skills",icon:"🩺",color:"#4D8AF0",desc:"History taking, physical exam, diagnostics, documentation",subtopics:[
     {id:"history-taking",label:"History Taking",desc:"HPI, ROS, PMH, family/social history"},
-    {id:"physical-exam",label:"Physical Assessment",desc:"Head-to-toe exam findings, abnormal findings, techniques"},
+    {id:"physical-exam",label:"Physical Assessment",desc:"Head-to-toe exam, abnormal findings"},
     {id:"diagnostics",label:"Diagnostics & Labs",desc:"Lab interpretation, imaging, EKG reading"},
-    {id:"documentation",label:"Clinical Documentation",desc:"SOAP notes, discharge summaries, referrals"},
+    {id:"documentation",label:"Clinical Documentation",desc:"SOAP notes, discharge summaries"},
     {id:"clinical-reasoning",label:"Clinical Reasoning",desc:"Differential diagnosis, pattern recognition"},
   ]},
-  {id:"pharmacology",label:"Pharmacology & Therapeutics",icon:"💊",color:"#845EC2",desc:"Drug classes, mechanisms, interactions, prescribing",subtopics:[
+  {id:"pharmacology",label:"Pharmacology & Therapeutics",icon:"💊",color:"#845EC2",desc:"Drug classes, mechanisms, interactions",subtopics:[
     {id:"pharm-principles",label:"Pharmacokinetics",desc:"ADME, half-life, volume of distribution"},
-    {id:"antibiotics",label:"Antibiotics",desc:"Beta-lactams, fluoroquinolones, macrolides, aminoglycosides"},
+    {id:"antibiotics",label:"Antibiotics",desc:"Beta-lactams, fluoroquinolones, macrolides"},
     {id:"cardiovascular-drugs",label:"Cardiovascular Drugs",desc:"Antihypertensives, antiarrhythmics, anticoagulants"},
     {id:"psych-drugs",label:"Psychiatric Medications",desc:"Antidepressants, antipsychotics, mood stabilizers"},
     {id:"drug-interactions",label:"Drug Interactions",desc:"CYP450 interactions, high-risk combinations"},
@@ -75,7 +104,7 @@ const DEEP_DIVE_MODULES = [
     {id:"neurology",label:"Neurology",desc:"Stroke, seizures, headache, dementia, MS"},
     {id:"endocrine",label:"Endocrinology",desc:"Diabetes, thyroid, adrenal, pituitary"},
     {id:"reproductive",label:"Reproductive",desc:"OB, gynecology, STIs, contraception"},
-    {id:"dermatology",label:"Dermatology",desc:"Common skin conditions, lesion ID, skin cancers"},
+    {id:"dermatology",label:"Dermatology",desc:"Skin conditions, lesion ID, skin cancers"},
     {id:"hematology",label:"Hematology/Oncology",desc:"Anemias, bleeding disorders, leukemia"},
     {id:"infectious-disease",label:"Infectious Disease",desc:"HIV, TB, sepsis, infection control"},
     {id:"rheumatology",label:"Rheumatology",desc:"SLE, RA, vasculitis, crystal arthropathies"},
@@ -110,23 +139,12 @@ const SUBJECTS = ["All","Anatomy & Physiology","Pharmacology","Clinical Medicine
 const DIFFS = ["Easy","Medium","Hard"];
 const SC = {"Anatomy & Physiology":"#00C9A7","Pharmacology":"#845EC2","Clinical Medicine":"#FF6F91","Pathophysiology":"#FFC75F","Medical Ethics & Law":"#4D8AF0"};
 const DC = {Easy:"#00C9A7",Medium:"#FFC75F",Hard:"#FF6F91"};
-
-const STUDY_MODES = [
-  {id:"infinite",  icon:"∞",  label:"Infinite Mode",    desc:"Endless questions, no pressure",         color:"#00C9A7"},
-  {id:"strikes",   icon:"⚡", label:"5 Strikes",         desc:"Miss 5 and it's game over",              color:"#FF6F91"},
-  {id:"flashcard", icon:"🃏", label:"Flashcards",        desc:"Term on front, answer on back",          color:"#845EC2"},
-  {id:"exam",      icon:"📋", label:"Practice Exam",     desc:"Timed, board-style full exams",          color:"#FFC75F"},
-  {id:"custom",    icon:"🎯", label:"Custom AI Topic",   desc:"Type any topic, AI generates questions", color:"#4D8AF0"},
-  {id:"lab",       icon:"🔬", label:"Lab & Anatomy",     desc:"Structures, functions, diagrams",        color:"#FF9F43"},
-];
-
 const EXAM_TYPES = [
-  {id:"pance",    label:"PANCE Practice",    questions:60,  time:60,  desc:"60 questions · 60 min · NCCPA style"},
-  {id:"boards",   label:"Board Simulation",  questions:120, time:120, desc:"120 questions · 2 hours · Full boards"},
-  {id:"paschool", label:"PA School Midterm", questions:50,  time:75,  desc:"50 questions · 75 min · Didactic year"},
-  {id:"custom",   label:"Custom Exam",       questions:0,   time:0,   desc:"You choose length and subject"},
+  {id:"pance",label:"PANCE Practice",questions:60,time:60,desc:"60 questions · 60 min · NCCPA style"},
+  {id:"boards",label:"Board Simulation",questions:120,time:120,desc:"120 questions · 2 hours · Full boards"},
+  {id:"paschool",label:"PA School Midterm",questions:50,time:75,desc:"50 questions · 75 min · Didactic year"},
+  {id:"custom",label:"Custom Exam",questions:0,time:0,desc:"You choose length and subject"},
 ];
-
 const ANATOMY_ITEMS = [
   {id:1,level:"undergrad",category:"Anatomy & Physiology",label:"Heart Valves",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Diagram_of_the_human_heart_%28cropped%29.svg/400px-Diagram_of_the_human_heart_%28cropped%29.svg.png",question:"Identify the valve between the left atrium and left ventricle",answer:"Mitral (Bicuspid) Valve",explanation:"The mitral valve has two leaflets and prevents backflow from LV to LA during systole."},
   {id:2,level:"undergrad",category:"Anatomy & Physiology",label:"Brachial Plexus",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brachial_plexus_color.svg/400px-Brachial_plexus_color.svg.png",question:"Which nerve roots form the brachial plexus?",answer:"C5–T1",explanation:"The brachial plexus (C5–T1) gives rise to the musculocutaneous, median, ulnar, radial, and axillary nerves."},
@@ -139,168 +157,162 @@ const store = {
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}},
 };
 
-// ─── SEED QUESTIONS ───────────────────────────────────────────────────────────
 const SEED_QUESTIONS = [
-  {id:1,subject:"Anatomy & Physiology",difficulty:"Medium",type:"mc",question:"Which heart valve separates the left atrium from the left ventricle?",options:["Tricuspid valve","Pulmonary valve","Mitral valve","Aortic valve"],answer:2,answerText:"Mitral valve",explanation:"The mitral (bicuspid) valve separates the left atrium from left ventricle. It has two leaflets and prevents backflow during ventricular contraction.",wrongExplanations:["The tricuspid valve is on the RIGHT side between right atrium and right ventricle.","The pulmonary valve is between right ventricle and pulmonary artery.","","The aortic valve is between left ventricle and aorta — not atrium-to-ventricle."]},
-  {id:2,subject:"Anatomy & Physiology",difficulty:"Hard",type:"fitb",question:"The ___ apparatus monitors blood pressure and secretes renin when it drops, activating the RAAS cascade.",answer:null,answerText:"juxtaglomerular",blankedWord:"juxtaglomerular",explanation:"The juxtaglomerular (JG) apparatus consists of macula densa cells and JG cells. It senses low renal perfusion and secretes renin to activate angiotensin II."},
-  {id:3,subject:"Anatomy & Physiology",difficulty:"Easy",type:"mc",question:"Primary function of the sinoatrial (SA) node?",options:["Delay conduction between atria and ventricles","Generate the primary pacemaker impulse","Distribute impulses through ventricular myocardium","Regulate stroke volume"],answer:1,answerText:"Generate the primary pacemaker impulse",explanation:"The SA node is the heart's natural pacemaker, depolarizing at 60–100 bpm to initiate each cardiac cycle.",wrongExplanations:["Delaying conduction is the AV node's function.","","Distributing impulses through the ventricles is the His-Purkinje system.","Stroke volume is regulated by preload, afterload, and contractility."]},
-  {id:4,subject:"Anatomy & Physiology",difficulty:"Medium",type:"free",question:"Explain the Frank-Starling mechanism and its clinical significance in heart failure.",answer:null,answerText:"",explanation:"The Frank-Starling law states that increased end-diastolic volume (preload) stretches sarcomeres toward optimal length, increasing cross-bridge formation and stroke volume. In heart failure, this mechanism is initially compensatory but eventually fails as the ventricle dilates beyond optimal sarcomere length, reducing contractility. This is why ACE inhibitors and diuretics (which reduce preload) improve outcomes — they bring the ventricle back to a more optimal operating point.",keyPoints:["Increased preload → increased stretch → increased stroke volume","Sarcomere optimal length ~2.2 μm","In HF: over-stretched sarcomeres → decreased contractility","Clinical: basis for using diuretics and ACE inhibitors in HF"]},
-  {id:5,subject:"Pharmacology",difficulty:"Medium",type:"mc",question:"How do beta-blockers primarily reduce blood pressure?",options:["Block alpha-1 receptors causing vasodilation","Decrease HR and CO via beta-1 blockade","Inhibit ACE preventing angiotensin II","Block calcium channels in vascular smooth muscle"],answer:1,answerText:"Decrease HR and CO via beta-1 blockade",explanation:"Beta-blockers antagonize catecholamines at beta-1 receptors, reducing chronotropy and inotropy to lower cardiac output and blood pressure.",wrongExplanations:["Alpha-1 blockade is prazosin's mechanism, not beta-blockers.","","ACE inhibition is lisinopril's mechanism.","Calcium channel blockade is amlodipine's mechanism."]},
-  {id:6,subject:"Pharmacology",difficulty:"Hard",type:"fitb",question:"Fluconazole inhibits ___, the primary enzyme metabolizing warfarin, raising warfarin levels and increasing bleeding risk.",answer:null,answerText:"CYP2C9",blankedWord:"CYP2C9",explanation:"CYP2C9 metabolizes the more potent S-enantiomer of warfarin. Fluconazole is a potent CYP2C9 inhibitor, causing dramatically increased warfarin exposure. INR must be monitored closely and warfarin dose reduced."},
-  {id:7,subject:"Pharmacology",difficulty:"Easy",type:"mc",question:"Antidote for acetaminophen overdose?",options:["Flumazenil","Naloxone","N-acetylcysteine","Physostigmine"],answer:2,answerText:"N-acetylcysteine",explanation:"NAC replenishes glutathione stores, neutralizing the toxic NAPQI metabolite responsible for hepatotoxicity.",wrongExplanations:["Flumazenil reverses benzodiazepine overdose.","Naloxone reverses opioid overdose.","","Physostigmine reverses anticholinergic toxicity."]},
-  {id:8,subject:"Pharmacology",difficulty:"Medium",type:"free",question:"A patient with type 2 diabetes has an eGFR of 35 mL/min and is currently on metformin. What is your management and why?",answer:null,answerText:"",explanation:"Metformin is contraindicated when eGFR <30 mL/min/1.73m² due to risk of lactic acidosis from drug accumulation. At eGFR 30-45, metformin should be used with caution and dose reduced. At eGFR 35, most guidelines recommend stopping metformin or reducing to 50% dose with close monitoring. Alternative agents should be considered — SGLT-2 inhibitors have reduced efficacy at this eGFR, GLP-1 agonists or DPP-4 inhibitors (dose-adjusted) are preferred.",keyPoints:["Metformin contraindicated if eGFR <30","Use with caution eGFR 30-45","Risk: lactic acidosis from accumulation","Alternatives: GLP-1 agonists, DPP-4 inhibitors (dose-adjusted)"]},
-  {id:9,subject:"Clinical Medicine",difficulty:"Medium",type:"mc",question:"ST elevation in II, III, aVF. Which artery is most likely occluded?",options:["Left anterior descending","Left circumflex","Right coronary artery","Left main"],answer:2,answerText:"Right coronary artery",explanation:"Inferior MI (ST elevation II, III, aVF) is most commonly RCA occlusion, supplying the inferior wall and posterior descending artery.",wrongExplanations:["LAD causes anterior MI — ST elevation in V1–V4.","LCx causes lateral MI — ST elevation in I, aVL, V5–V6.","","Left main causes massive anterior-lateral MI with hemodynamic collapse."]},
-  {id:10,subject:"Clinical Medicine",difficulty:"Easy",type:"fitb",question:"The most common cause of community-acquired pneumonia in healthy adults is ___, which is treated empirically with beta-lactams or respiratory fluoroquinolones.",answer:null,answerText:"Streptococcus pneumoniae",blankedWord:"Streptococcus pneumoniae",explanation:"S. pneumoniae (pneumococcus) is responsible for ~35–40% of CAP cases. It presents as typical pneumonia with acute onset, productive cough, lobar consolidation, and elevated WBC."},
-  {id:11,subject:"Clinical Medicine",difficulty:"Hard",type:"free",question:"A 68-year-old male presents with 3 days of progressive dyspnea, orthopnea, and lower extremity edema. Exam shows JVD, S3 gallop, bibasilar crackles, and pitting edema to the knees. BNP is 1,200. What is your diagnosis, pathophysiology, and initial management?",answer:null,answerText:"",explanation:"This is acute decompensated heart failure (ADHF). The S3 gallop, JVD, bibasilar crackles, pitting edema, and elevated BNP confirm the diagnosis. Pathophysiology: reduced cardiac output → neurohormonal activation (RAAS, SNS) → sodium/water retention → increased preload → pulmonary congestion. Management: IV furosemide (diuresis), oxygen, position upright, monitor ins/outs, daily weights, echocardiography to assess EF, BMP for electrolytes/renal function. If HFrEF confirmed, initiate/optimize GDMT (ACEi/ARB, beta-blocker, spironolactone, SGLT-2i).",keyPoints:["Diagnosis: ADHF with likely HFrEF","BNP >500 highly specific for HF","First-line: IV furosemide + oxygen","Echo to assess EF","GDMT optimization once stabilized"]},
-  {id:12,subject:"Pathophysiology",difficulty:"Medium",type:"mc",question:"Mechanism of hyperglycemia in Type 1 diabetes?",options:["Peripheral insulin resistance","Autoimmune destruction of beta cells","Excess glucagon secretion","Decreased renal glucose threshold"],answer:1,answerText:"Autoimmune destruction of beta cells",explanation:"Type 1 DM: autoimmune T-cell mediated destruction of pancreatic beta cells → absolute insulin deficiency → unregulated hepatic glucose production.",wrongExplanations:["Peripheral insulin resistance is Type 2 DM.","","Excess glucagon is a consequence, not the primary mechanism.","Decreased renal threshold causes glucosuria — not the cause of hyperglycemia."]},
-  {id:13,subject:"Pathophysiology",difficulty:"Hard",type:"fitb",question:"In hemorrhagic shock, the earliest compensatory mechanism is ___ activation, which triggers tachycardia and vasoconstriction within seconds.",answer:null,answerText:"baroreceptor/sympathetic",blankedWord:"baroreceptor/sympathetic",explanation:"Baroreceptors in the carotid sinus and aortic arch detect falling arterial pressure and immediately trigger sympathetic discharge. This is the fastest compensatory response — RAAS and ADH activation follow minutes later."},
-  {id:14,subject:"Pathophysiology",difficulty:"Easy",type:"mc",question:"Left heart failure most commonly leads to?",options:["Pulmonary embolism","Pulmonary edema","Pneumothorax","Pleural empyema"],answer:1,answerText:"Pulmonary edema",explanation:"Left heart failure increases pulmonary venous pressure → fluid leaks into alveoli and interstitium → pulmonary edema.",wrongExplanations:["PE is from venous thromboembolism — not directly related to LHF.","","Pneumothorax is air in the pleural space — trauma or spontaneous rupture.","Pleural empyema is infected pleural fluid — complication of pneumonia."]},
-  {id:15,subject:"Medical Ethics & Law",difficulty:"Easy",type:"mc",question:"Ethical principle requiring action in the patient's best interest?",options:["Autonomy","Beneficence","Non-maleficence","Justice"],answer:1,answerText:"Beneficence",explanation:"Beneficence obligates clinicians to act for the patient's benefit. Must be balanced with autonomy when patients make decisions that may not optimize health.",wrongExplanations:["Autonomy is the patient's right to make their own decisions.","","Non-maleficence is 'do no harm' — avoiding harm, not actively promoting benefit.","Justice is about fair distribution of healthcare resources."]},
-  {id:16,subject:"Medical Ethics & Law",difficulty:"Medium",type:"fitb",question:"A competent adult who refuses life-saving treatment is exercising their right to ___, which providers must legally and ethically respect.",answer:null,answerText:"autonomy",blankedWord:"autonomy",explanation:"Patient autonomy is a foundational bioethical principle. Competent adults have the legal right to refuse any treatment, even life-saving interventions. Overriding this constitutes battery. The provider's role is to ensure the patient has decision-making capacity and is making an informed, voluntary decision."},
-  {id:17,subject:"Medical Ethics & Law",difficulty:"Hard",type:"free",question:"Explain the four elements required to establish medical malpractice and give a clinical example of each.",answer:null,answerText:"",explanation:"The 4 Ds of medical malpractice: (1) Duty — a provider-patient relationship existed (e.g., a PA evaluated and treated the patient). (2) Dereliction — a breach of the standard of care (e.g., failing to order troponin in a patient with chest pain). (3) Direct causation — the breach directly caused harm (e.g., the missed MI led to cardiac arrest). (4) Damages — quantifiable harm resulted (e.g., permanent cardiac damage, lost wages). All four must be proven for a successful malpractice claim.",keyPoints:["Duty: provider-patient relationship","Dereliction: breach of standard of care","Direct causation: breach caused harm","Damages: quantifiable harm","All 4 elements must be proven"]},
-  {id:18,subject:"Anatomy & Physiology",difficulty:"Easy",type:"fitb",question:"The ___ is the heart's natural pacemaker, spontaneously depolarizing at 60–100 beats per minute.",answer:null,answerText:"sinoatrial (SA) node",blankedWord:"sinoatrial (SA) node",explanation:"The SA node is located in the right atrium near the superior vena cava. It has the fastest intrinsic rate (60–100 bpm) so it dominates pacemaking. If it fails, the AV node takes over at 40–60 bpm."},
-  {id:19,subject:"Pharmacology",difficulty:"Medium",type:"mc",question:"Which drug class is first-line for managing type 2 diabetes without contraindications?",options:["Sulfonylureas","SGLT-2 inhibitors","Metformin","GLP-1 agonists"],answer:2,answerText:"Metformin",explanation:"Metformin is first-line due to efficacy, safety, low cost, weight neutrality, and cardiovascular benefits. It works by reducing hepatic gluconeogenesis.",wrongExplanations:["Sulfonylureas cause hypoglycemia and weight gain — second or third line.","SGLT-2 inhibitors are excellent second-line agents, especially with HF or CKD.","","GLP-1 agonists preferred when weight loss is priority — not first-line alone."]},
-  {id:20,subject:"Clinical Medicine",difficulty:"Medium",type:"free",question:"Describe the SIRS criteria and explain how Sepsis-3 changed the definition of sepsis.",answer:null,answerText:"",explanation:"SIRS (Systemic Inflammatory Response Syndrome) requires ≥2 of: temp >38°C or <36°C, HR >90 bpm, RR >20 or PaCO2 <32 mmHg, WBC >12,000 or <4,000 or >10% bands. The original Sepsis-1 and Sepsis-2 definitions used SIRS + suspected infection. Sepsis-3 (2016) abandoned SIRS because it was too sensitive and non-specific — even simple infections met criteria. Sepsis-3 redefines sepsis as life-threatening organ dysfunction from a dysregulated host response to infection, identified by SOFA score increase ≥2. Septic shock = sepsis + vasopressors needed + lactate >2 mmol/L despite adequate fluids.",keyPoints:["SIRS: ≥2 of temp/HR/RR/WBC criteria","Sepsis-3: SOFA ≥2 + suspected infection","Abandoned SIRS — too sensitive/non-specific","Septic shock: vasopressors + lactate >2"]},
+  {id:1,subject:"Anatomy & Physiology",difficulty:"Medium",type:"mc",question:"Which heart valve separates the left atrium from the left ventricle?",options:["Tricuspid valve","Pulmonary valve","Mitral valve","Aortic valve"],answer:2,answerText:"Mitral valve",explanation:"The mitral (bicuspid) valve separates the left atrium from the left ventricle. It has two leaflets and prevents backflow during ventricular contraction.",wrongExplanations:["Tricuspid valve is on the RIGHT side — right atrium to right ventricle.","Pulmonary valve is between right ventricle and pulmonary artery.","","Aortic valve is between left ventricle and aorta — not atrium-to-ventricle."]},
+  {id:2,subject:"Anatomy & Physiology",difficulty:"Hard",type:"fitb",question:"The ___ apparatus monitors blood pressure and secretes renin when it drops, activating the RAAS cascade.",answer:null,answerText:"juxtaglomerular",blankedWord:"juxtaglomerular",explanation:"The juxtaglomerular apparatus senses low renal perfusion and secretes renin to activate angiotensin II via RAAS."},
+  {id:3,subject:"Anatomy & Physiology",difficulty:"Easy",type:"mc",question:"Primary function of the sinoatrial (SA) node?",options:["Delay conduction between atria and ventricles","Generate the primary pacemaker impulse","Distribute impulses through ventricular myocardium","Regulate stroke volume"],answer:1,answerText:"Generate the primary pacemaker impulse",explanation:"The SA node is the heart's natural pacemaker, depolarizing at 60–100 bpm.",wrongExplanations:["Delaying conduction is the AV node's function.","","Distributing ventricular impulses is the His-Purkinje system.","Stroke volume is regulated by preload, afterload, and contractility."]},
+  {id:4,subject:"Anatomy & Physiology",difficulty:"Medium",type:"free",question:"Explain the Frank-Starling mechanism and its clinical significance in heart failure.",answer:null,answerText:"",explanation:"The Frank-Starling law: increased end-diastolic volume stretches sarcomeres → increased cross-bridge formation → increased stroke volume. In HF, over-stretched sarcomeres reduce contractility. Diuretics and ACE inhibitors reduce preload, restoring optimal sarcomere length.",keyPoints:["Increased preload → increased stretch → increased stroke volume","Optimal sarcomere length ~2.2 μm","Over-stretched sarcomeres → decreased contractility in HF","Basis for diuretics and ACEi in HF management"]},
+  {id:5,subject:"Pharmacology",difficulty:"Medium",type:"mc",question:"How do beta-blockers primarily reduce blood pressure?",options:["Block alpha-1 receptors causing vasodilation","Decrease HR and CO via beta-1 blockade","Inhibit ACE preventing angiotensin II","Block calcium channels in vascular smooth muscle"],answer:1,answerText:"Decrease HR and CO via beta-1 blockade",explanation:"Beta-blockers antagonize catecholamines at beta-1 receptors, reducing chronotropy and inotropy to lower cardiac output.",wrongExplanations:["Alpha-1 blockade is prazosin's mechanism.","","ACE inhibition is lisinopril's mechanism.","Calcium channel blockade is amlodipine's mechanism."]},
+  {id:6,subject:"Pharmacology",difficulty:"Hard",type:"fitb",question:"Fluconazole inhibits ___, raising warfarin levels and significantly increasing bleeding risk.",answer:null,answerText:"CYP2C9",blankedWord:"CYP2C9",explanation:"CYP2C9 metabolizes warfarin's S-enantiomer. Fluconazole inhibits CYP2C9, dramatically increasing warfarin exposure. Monitor INR closely."},
+  {id:7,subject:"Pharmacology",difficulty:"Easy",type:"mc",question:"Antidote for acetaminophen overdose?",options:["Flumazenil","Naloxone","N-acetylcysteine","Physostigmine"],answer:2,answerText:"N-acetylcysteine",explanation:"NAC replenishes glutathione, neutralizing the toxic NAPQI metabolite responsible for hepatotoxicity.",wrongExplanations:["Flumazenil reverses benzodiazepines.","Naloxone reverses opioids.","","Physostigmine reverses anticholinergics."]},
+  {id:8,subject:"Clinical Medicine",difficulty:"Medium",type:"mc",question:"ST elevation in II, III, aVF. Which artery is most likely occluded?",options:["Left anterior descending","Left circumflex","Right coronary artery","Left main"],answer:2,answerText:"Right coronary artery",explanation:"Inferior MI (ST elevation II, III, aVF) is most commonly RCA occlusion, supplying the inferior wall.",wrongExplanations:["LAD causes anterior MI — V1–V4.","LCx causes lateral MI — I, aVL, V5–V6.","","Left main causes massive anterior-lateral MI with hemodynamic collapse."]},
+  {id:9,subject:"Clinical Medicine",difficulty:"Easy",type:"fitb",question:"The most common cause of community-acquired pneumonia in healthy adults is ___, treated with beta-lactams or respiratory fluoroquinolones.",answer:null,answerText:"Streptococcus pneumoniae",blankedWord:"Streptococcus pneumoniae",explanation:"S. pneumoniae causes ~35–40% of CAP. Presents with acute onset, productive cough, lobar consolidation, elevated WBC."},
+  {id:10,subject:"Pathophysiology",difficulty:"Medium",type:"mc",question:"Mechanism of hyperglycemia in Type 1 diabetes?",options:["Peripheral insulin resistance","Autoimmune destruction of beta cells","Excess glucagon secretion","Decreased renal glucose threshold"],answer:1,answerText:"Autoimmune destruction of beta cells",explanation:"Type 1 DM: autoimmune T-cell destruction of pancreatic beta cells → absolute insulin deficiency.",wrongExplanations:["Peripheral insulin resistance is Type 2 DM.","","Excess glucagon is a consequence, not the primary mechanism.","Decreased renal threshold causes glucosuria — not the primary cause."]},
+  {id:11,subject:"Pathophysiology",difficulty:"Hard",type:"free",question:"A 68-year-old male presents with progressive dyspnea, orthopnea, JVD, S3 gallop, and bibasilar crackles. BNP is 1,200. Diagnose, explain the pathophysiology, and outline initial management.",answer:null,answerText:"",explanation:"Acute decompensated heart failure (ADHF). Reduced cardiac output → neurohormonal activation (RAAS, SNS) → sodium/water retention → increased preload → pulmonary congestion. Management: IV furosemide, oxygen, upright positioning, echo to assess EF, BMP for electrolytes, optimize GDMT (ACEi, beta-blocker, spironolactone, SGLT-2i).",keyPoints:["Diagnosis: ADHF — BNP >500 highly specific","Pathophys: reduced CO → RAAS activation → volume overload","First-line: IV furosemide + oxygen","Echo to assess EF, then optimize GDMT"]},
+  {id:12,subject:"Medical Ethics & Law",difficulty:"Easy",type:"mc",question:"Ethical principle requiring action in the patient's best interest?",options:["Autonomy","Beneficence","Non-maleficence","Justice"],answer:1,answerText:"Beneficence",explanation:"Beneficence obligates clinicians to act for the patient's benefit, balanced with autonomy.",wrongExplanations:["Autonomy is the patient's right to make their own decisions.","","Non-maleficence is 'do no harm.'","Justice is fair distribution of healthcare resources."]},
+  {id:13,subject:"Medical Ethics & Law",difficulty:"Medium",type:"fitb",question:"A competent adult who refuses life-saving treatment is exercising their right to ___, which providers must legally and ethically respect.",answer:null,answerText:"autonomy",blankedWord:"autonomy",explanation:"Patient autonomy is foundational in bioethics. Competent adults may refuse any treatment. Overriding this constitutes battery."},
+  {id:14,subject:"Medical Ethics & Law",difficulty:"Hard",type:"free",question:"Explain the four elements required to establish medical malpractice and provide a clinical example of each.",answer:null,answerText:"",explanation:"The 4 Ds: (1) Duty — provider-patient relationship existed. (2) Dereliction — breach of standard of care (e.g., failing to order troponin in chest pain). (3) Direct causation — breach directly caused harm (e.g., missed MI led to arrest). (4) Damages — quantifiable harm (e.g., permanent cardiac damage). All four must be proven.",keyPoints:["Duty: provider-patient relationship","Dereliction: breach of standard of care","Direct causation: breach caused the harm","Damages: quantifiable injury resulted","All 4 elements required for successful claim"]},
+  {id:15,subject:"Pathophysiology",difficulty:"Easy",type:"mc",question:"Left heart failure most commonly leads to?",options:["Pulmonary embolism","Pulmonary edema","Pneumothorax","Pleural empyema"],answer:1,answerText:"Pulmonary edema",explanation:"LHF increases pulmonary venous pressure → fluid leaks into alveoli and interstitium.",wrongExplanations:["PE is from venous thromboembolism.","","Pneumothorax is air in pleural space — trauma or spontaneous.","Pleural empyema is infected pleural fluid — complication of pneumonia."]},
 ];
 
-// ─── AI GENERATION ────────────────────────────────────────────────────────────
-async function generateEliteQuestions({ subject, difficulty, count=10, mode="standard", questionType="mc", customTopic="", deepDiveTopic="", examType="", used=[] }) {
+// ─── AI CALLS ─────────────────────────────────────────────────────────────────
+const callAI = async(prompt, maxTokens=4000) => {
   const apiKey = CONFIG.ANTHROPIC_KEY;
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY_HERE") return [];
+  if(!apiKey||apiKey==="YOUR_ANTHROPIC_API_KEY_HERE") return null;
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTokens,messages:[{role:"user",content:prompt}]})
+  });
+  const data = await res.json();
+  return data.content?.find(b=>b.type==="text")?.text||null;
+};
 
-  const recentQ = used.slice(-10).map(q=>q.question).join("; ");
-  const subjectCtx = deepDiveTopic ? `"${deepDiveTopic}"` : subject==="All" ? "across all PA school subjects" : subject;
+// Generate lesson content
+const generateLesson = async(topic, level, method) => {
+  const levelCtx = LEVELS.find(l=>l.id===level);
+  const prompts = {
+    lesson: `You are an expert PA school educator. Create a focused lesson on "${topic}" for a ${levelCtx.label} level student (${levelCtx.desc}).
 
-  // Question type instructions
-  let typeInstr = "";
-  if (questionType === "mc" || questionType === "mixed") {
-    typeInstr += `
-MULTIPLE CHOICE format:
-{
-  "type": "mc",
-  "question": "clinical question",
-  "options": ["A","B","C","D"],
-  "answer": 0,
-  "answerText": "correct option text",
-  "explanation": "why correct",
-  "wrongExplanations": ["why A wrong","why B wrong","why C wrong","why D wrong"]
-}`;
-  }
-  if (questionType === "fitb" || questionType === "mixed") {
-    typeInstr += `
-FILL IN THE BLANK format (use ___ for the blank):
-{
-  "type": "fitb",
-  "question": "The ___ is responsible for X in context Y.",
-  "answer": null,
-  "answerText": "exact answer for the blank",
-  "blankedWord": "the word/phrase that was blanked",
-  "explanation": "clinical explanation"
-}`;
-  }
-  if (questionType === "free" || questionType === "mixed") {
-    typeInstr += `
-FREE RESPONSE format (open-ended clinical questions):
-{
-  "type": "free",
-  "question": "Explain/Describe/A patient presents with... what is your...",
-  "answer": null,
-  "answerText": "",
-  "explanation": "comprehensive model answer 3-5 sentences",
-  "keyPoints": ["key point 1", "key point 2", "key point 3", "key point 4"]
-}`;
-  }
+Structure:
+1. OVERVIEW (2-3 sentences introducing the concept)
+2. KEY CONCEPTS (4-6 bullet points of the most important things to know)
+3. CLINICAL RELEVANCE (how this applies in practice)
+4. MEMORY HOOK (a memorable way to remember this)
+5. COMMON MISTAKES (what students get wrong)
 
-  const mixedInstr = questionType === "mixed"
-    ? "Generate a MIX: roughly 50% multiple choice, 25% fill in the blank, 25% free response. Vary the types throughout."
-    : `Generate ONLY ${questionType === "mc" ? "multiple choice" : questionType === "fitb" ? "fill in the blank" : "free response"} questions.`;
+Write at exactly the right level — not too basic, not too advanced. Be concise and clinically focused.
+Return as plain text with clear section headers.`,
 
-  let modeInstr = "";
-  if (mode==="exam" && examType==="pance") modeInstr = "PANCE STYLE: Match NCCPA blueprint. Clinical vignettes with demographics, vitals, labs. Focus on diagnosis, management, next best step.";
-  else if (mode==="exam" && examType==="boards") modeInstr = "BOARD SIMULATION: Maximum difficulty. Test clinical reasoning. Include pharmacology pearls and management algorithms.";
-  else if (mode==="exam" && examType==="paschool") modeInstr = "PA SCHOOL MIDTERM: Mix conceptual and clinical. Cover pathophysiology mechanisms, MOA, anatomy.";
-  else if (mode==="strikes") modeInstr = "SURVIVAL MODE: Progressively harder. Tricky distractors testing deep understanding.";
-  else if (deepDiveTopic) modeInstr = `DEEP DIVE: Generate highly specific questions about "${deepDiveTopic}". Cover pathophysiology, clinical presentation, diagnosis, treatment, complications.`;
-  else if (customTopic) modeInstr = `CUSTOM TOPIC: "${customTopic}". Generate questions specifically about this topic at PA school level.`;
+    guide: `You are an expert PA school educator. Create a comprehensive study guide on "${topic}" for a ${levelCtx.label} level student.
 
-  const prompt = `You are an elite PA school educator and board exam question writer with 20 years of experience.
+Include:
+1. INTRODUCTION & BACKGROUND
+2. CORE PATHOPHYSIOLOGY / MECHANISM
+3. CLINICAL PRESENTATION
+4. DIAGNOSIS & WORKUP
+5. TREATMENT & MANAGEMENT
+6. COMPLICATIONS
+7. HIGH-YIELD BOARDS FACTS (if relevant)
+8. QUICK REFERENCE TABLE (key facts in table format using plain text)
 
-Generate ${count} high-quality, clinically accurate PA school questions.
+Calibrate depth to ${levelCtx.label} level. Be thorough but organized.
+Return as plain text with clear headers.`,
 
-Subject: ${subjectCtx}
-Difficulty: ${difficulty&&difficulty!=="All"?difficulty:"mix of Easy (20%), Medium (50%), Hard (30%)"}
-${modeInstr}
+    flashcard: `You are an expert PA school educator. Create 8-10 concept flashcards on "${topic}" for a ${levelCtx.label} level student.
 
-${mixedInstr}
+Each flashcard: a key term or concept on the front, a concise explanation on the back.
+Return ONLY valid JSON array:
+[{"front": "term or concept", "back": "explanation 1-3 sentences"}]`,
 
-QUESTION TYPE FORMATS:
-${typeInstr}
+    tutor: `You are an expert, friendly PA school tutor. A ${levelCtx.label} level student wants to learn about "${topic}".
 
-QUALITY STANDARDS:
-- Clinically realistic and board-accurate
-- Clinical vignettes with patient details when appropriate
-- Wrong answer choices must be plausible distractors
-- Explanations must teach, not just confirm
-- Free response questions should have comprehensive model answers with key points
-- Fill in the blank should blank the most clinically important term
-- Never repeat: ${recentQ}
+Start by giving a warm welcome and a brief overview of what you'll cover together. Then explain the most fundamental concept first, as if speaking to them directly. End with "What aspect would you like to explore first?" or offer 3 specific follow-up options they can choose from.
 
-Return ONLY a valid JSON array, no markdown, no preamble. Each object must have a "type" field ("mc", "fitb", or "free") and a "subject" field matching one of the PA school subjects.`;
+Be conversational, encouraging, and appropriately detailed for their level. Use analogies where helpful.`
+  };
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:prompt}]})
-    });
-    const data = await res.json();
-    const text = data.content?.find(b=>b.type==="text")?.text||"[]";
+    const text = await callAI(prompts[method]||prompts.lesson, method==="guide"?6000:3000);
+    if(!text) return null;
+    if(method==="flashcard"){
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      return parsed;
+    }
+    return text;
+  } catch(e) { return null; }
+};
+
+// Generate questions
+const generateQuestions = async({subject,difficulty,count=10,questionType="mixed",topic="",level="didactic",examType="",used=[]}) => {
+  const levelCtx = LEVELS.find(l=>l.id===level)||LEVELS[1];
+  const recentQ = used.slice(-8).map(q=>q.question).join("; ");
+
+  let typeInstr = "";
+  if(questionType==="mc"||questionType==="mixed") typeInstr += `MC: {"type":"mc","subject":"subject","difficulty":"Easy|Medium|Hard","question":"text","options":["A","B","C","D"],"answer":0,"answerText":"correct text","explanation":"why correct","wrongExplanations":["why A","why B","why C","why D"]}`;
+  if(questionType==="fitb"||questionType==="mixed") typeInstr += `\nFITB: {"type":"fitb","subject":"subject","difficulty":"Easy|Medium|Hard","question":"The ___ is...","answer":null,"answerText":"blanked term","blankedWord":"term","explanation":"explanation"}`;
+  if(questionType==="free"||questionType==="mixed") typeInstr += `\nFREE: {"type":"free","subject":"subject","difficulty":"Easy|Medium|Hard","question":"Explain/Describe...","answer":null,"answerText":"","explanation":"model answer 3-5 sentences","keyPoints":["point1","point2","point3"]}`;
+
+  const mixInstr = questionType==="mixed"?"Generate mix: ~50% MC, 25% FITB, 25% free response.":`Generate ONLY ${questionType} questions.`;
+  const examInstr = examType==="pance"?"PANCE style — NCCPA blueprint, clinical vignettes.":examType==="boards"?"Maximum difficulty board-style vignettes.":examType==="paschool"?"PA school didactic year style.":"";
+  const levelInstr = `LEVEL: ${levelCtx.label} (${levelCtx.desc}). Calibrate question complexity, vocabulary, and expected knowledge accordingly.`;
+
+  const prompt = `You are an elite PA school educator and board exam writer.
+
+Generate ${count} questions on: ${topic||subject||"all PA school subjects"}
+${levelInstr}
+Difficulty: ${difficulty&&difficulty!=="All"?difficulty:"mix Easy/Medium/Hard"}
+${examInstr}
+${mixInstr}
+Never repeat: ${recentQ}
+
+FORMAT — return ONLY valid JSON array:
+[${typeInstr}]
+
+wrongExplanations array: 4 entries, correct answer entry = "".`;
+
+  try {
+    const text = await callAI(prompt);
+    if(!text) return [];
     const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
     return parsed.map((q,i)=>({...q,id:Date.now()+i,ai:true}));
-  } catch(e) { console.error("AI error:",e); return []; }
-}
+  } catch(e) { return []; }
+};
 
-// ─── AI FREE RESPONSE GRADING ─────────────────────────────────────────────────
-async function gradeResponse(question, modelAnswer, keyPoints, userAnswer) {
-  const apiKey = CONFIG.ANTHROPIC_KEY;
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY_HERE") {
-    return { score: null, feedback: "Add your Anthropic API key to enable AI grading.", correct: null };
-  }
-  const prompt = `You are a PA school professor grading a student's free response answer.
-
+// Grade free response
+const gradeResponse = async(question, modelAnswer, keyPoints, userAnswer) => {
+  const prompt = `You are a PA school professor grading a student's free response.
 Question: ${question}
-
 Model Answer: ${modelAnswer}
-
-Key Points to cover: ${keyPoints ? keyPoints.join(", ") : ""}
-
-Student's Answer: ${userAnswer}
-
-Grade this response. Be fair but rigorous — this is PA school level.
+Key Points: ${keyPoints?keyPoints.join(", "):""}
+Student Answer: ${userAnswer}
 
 Return ONLY valid JSON:
-{
-  "score": 85,
-  "grade": "B",
-  "correct": true,
-  "feedback": "2-3 sentence personalized feedback on what they got right and what to improve",
-  "missedPoints": ["any key points they missed"],
-  "strengths": ["what they did well"]
-}
-
-Score 0-100. correct = true if score >= 70.`;
-
+{"score":85,"grade":"B","correct":true,"feedback":"2-3 sentence personalized feedback","missedPoints":["missed items"],"strengths":["strengths"]}
+correct = true if score >= 70.`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{role:"user",content:prompt}]})
-    });
-    const data = await res.json();
-    const text = data.content?.find(b=>b.type==="text")?.text||"{}";
+    const text = await callAI(prompt, 600);
+    if(!text) return {score:null,feedback:"Add API key for AI grading.",correct:null};
     return JSON.parse(text.replace(/```json|```/g,"").trim());
-  } catch(e) { return { score:null, feedback:"Could not grade response.", correct:null }; }
-}
+  } catch(e) { return {score:null,feedback:"Could not grade response.",correct:null}; }
+};
+
+// AI Tutor chat response
+const tutorChat = async(topic, level, history, userMessage) => {
+  const levelCtx = LEVELS.find(l=>l.id===level)||LEVELS[1];
+  const historyText = history.map(h=>`${h.role==="user"?"Student":"Tutor"}: ${h.content}`).join("\n");
+  const prompt = `You are an expert, friendly PA school tutor helping a ${levelCtx.label} level student learn about "${topic}".
+
+Conversation so far:
+${historyText}
+Student: ${userMessage}
+
+Respond as a knowledgeable, encouraging tutor. Be conversational. Explain concepts clearly at the ${levelCtx.label} level. Use clinical examples. Keep responses focused (3-5 sentences unless a detailed explanation is needed). End with a question or offer to explore a specific aspect if it helps the conversation.`;
+  try {
+    const text = await callAI(prompt, 1000);
+    return text||"I couldn't generate a response. Please check your API key.";
+  } catch(e) { return "Something went wrong. Please try again."; }
+};
 
 // ─── DESIGN ───────────────────────────────────────────────────────────────────
 const S = {
@@ -312,133 +324,91 @@ const S = {
   ghostBtn:{width:"100%",padding:"14px",borderRadius:12,cursor:"pointer",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#6a7a9a",fontSize:14},
   lbl:{fontSize:10,letterSpacing:5,color:"#4a5a7a",textTransform:"uppercase",fontFamily:"monospace",marginBottom:10,display:"block"},
 };
-
 const Logo=()=><span style={{fontWeight:700,fontSize:17,background:"linear-gradient(135deg,#00C9A7,#845EC2)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>PA Prep Pro</span>;
 const Pill=({children,color="#00C9A7"})=><span style={{fontSize:10,padding:"3px 10px",borderRadius:99,background:`${color}18`,color,fontFamily:"monospace",letterSpacing:1}}>{children}</span>;
 const PBar=({value,max,color="#00C9A7",h=3})=><div style={{height:h,background:"rgba(255,255,255,0.05)",borderRadius:99}}><div style={{height:"100%",width:`${Math.min((value/Math.max(max,1))*100,100)}%`,background:color,borderRadius:99,transition:"width 0.6s ease"}}/></div>;
 const FBtn=({label,active,color,onClick})=><button onClick={onClick} style={{padding:"7px 13px",borderRadius:20,fontSize:12,cursor:"pointer",transition:"all 0.15s",border:active?`1px solid ${color}`:"1px solid rgba(255,255,255,0.07)",background:active?`${color}22`:"rgba(255,255,255,0.03)",color:active?color:"#5a6d94"}}>{label}</button>;
-const Spinner=({msg=""})=><div style={{...S.page,justifyContent:"center"}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,minHeight:"80vh",justifyContent:"center"}}><div style={{width:44,height:44,borderRadius:"50%",border:"3px solid rgba(0,201,167,0.15)",borderTopColor:"#00C9A7",animation:"spin 0.8s linear infinite"}}/><div style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace",textAlign:"center",maxWidth:280}}>{msg||"Loading…"}</div></div></div>;
-
-// ─── QUESTION TYPE BADGE ──────────────────────────────────────────────────────
-const QTypeBadge = ({type})=>{
-  const map = {mc:{label:"Multiple Choice",color:"#00C9A7"},fitb:{label:"Fill in the Blank",color:"#845EC2"},free:{label:"Free Response",color:"#FF6F91"}};
-  const t = map[type]||map.mc;
-  return <Pill color={t.color}>{t.label}</Pill>;
-};
-
-// ─── FILL IN THE BLANK RENDERER ───────────────────────────────────────────────
-const FITBQuestion = ({question,revealed,userAnswer,onAnswer,onReveal})=>{
-  const [input,setInput] = React.useState("");
-  const parts = question.split("___");
-
-  return (
-    <div>
-      <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.9,marginBottom:20,color:"#dde6ff"}}>
-        {parts[0]}
-        {!revealed?(
-          <input
-            value={input}
-            onChange={e=>setInput(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&input.trim()&&onReveal(input)}
-            placeholder="type answer..."
-            style={{display:"inline-block",width:180,padding:"4px 10px",borderRadius:8,border:"1px solid rgba(132,94,194,0.5)",background:"rgba(132,94,194,0.1)",color:"#a8c0ff",fontSize:14,outline:"none",margin:"0 4px",verticalAlign:"middle"}}
-          />
-        ):(
-          <span style={{display:"inline-block",padding:"4px 12px",borderRadius:8,background:userAnswer?"rgba(0,201,167,0.15)":"rgba(255,111,145,0.15)",color:userAnswer?"#00C9A7":"#FF6F91",fontWeight:700,margin:"0 4px",border:`1px solid ${userAnswer?"rgba(0,201,167,0.4)":"rgba(255,111,145,0.4)"}`}}>
-            {userAnswer||"(not answered)"}
-          </span>
-        )}
-        {parts[1]}
-      </div>
-      {!revealed&&(
-        <button onClick={()=>onReveal(input)} disabled={!input.trim()} style={{...S.primaryBtn({background:"linear-gradient(135deg,#845EC2,#6a44aa)",opacity:input.trim()?1:0.5})}}>
-          Submit Answer →
-        </button>
-      )}
-    </div>
-  );
-};
-
-// ─── FREE RESPONSE RENDERER ───────────────────────────────────────────────────
-const FreeResponseQuestion = ({question,onSubmit,revealed,aiGrade,loading})=>{
-  const [text,setText] = React.useState("");
-  return (
-    <div>
-      <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.8,marginBottom:16,color:"#dde6ff"}}>{question}</div>
-      {!revealed?(
-        <div>
-          <span style={S.lbl}>Your Response</span>
-          <textarea
-            value={text}
-            onChange={e=>setText(e.target.value)}
-            placeholder="Write your clinical answer here. Be thorough — this is graded like a PA school exam."
-            style={{...S.inp,minHeight:140,resize:"vertical",marginBottom:12,lineHeight:1.6}}
-          />
-          <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12,textAlign:"right",fontFamily:"monospace"}}>{text.split(" ").filter(Boolean).length} words</div>
-          <button onClick={()=>text.trim()&&onSubmit(text)} disabled={!text.trim()||loading} style={{...S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)",opacity:text.trim()&&!loading?1:0.5})}}>
-            {loading?"AI Grading…":"Submit for AI Grading →"}
-          </button>
-        </div>
-      ):(
-        <div style={{...S.card,background:"rgba(255,255,255,0.02)",borderColor:"rgba(255,255,255,0.06)"}}>
-          <span style={{...S.lbl,color:"#6a7a9a"}}>Your Response</span>
-          <p style={{fontSize:13,color:"#6a7a9a",lineHeight:1.7,fontStyle:"italic"}}>{text}</p>
-        </div>
-      )}
-    </div>
-  );
-};
+const Spinner=({msg=""})=><div style={{...S.page,justifyContent:"center"}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,minHeight:"80vh",justifyContent:"center"}}><div style={{width:44,height:44,borderRadius:"50%",border:"3px solid rgba(0,201,167,0.15)",borderTopColor:"#00C9A7",animation:"spin 0.8s linear infinite"}}/><div style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace",textAlign:"center",maxWidth:300}}>{msg||"Loading…"}</div></div></div>;
+const QTypeBadge=({type})=>{const m={mc:{l:"Multiple Choice",c:"#00C9A7"},fitb:{l:"Fill in Blank",c:"#845EC2"},free:{l:"Free Response",c:"#FF6F91"}};const t=m[type]||m.mc;return <Pill color={t.c}>{t.l}</Pill>;};
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
-  const [screen,setScreen]           = React.useState("landing");
-  const [tab,setTab]                 = React.useState("study");
-  const [authMode,setAuthMode]       = React.useState("signup");
-  const [form,setForm]               = React.useState({name:"",email:"",password:""});
-  const [formErr,setFormErr]         = React.useState("");
-  const [user,setUser]               = React.useState(()=>store.get("paprep_user"));
-  const [loading,setLoading]         = React.useState(false);
-  const [loadMsg,setLoadMsg]         = React.useState("");
-  const [prog,setProg]               = React.useState(()=>store.get("paprep_prog")||{totalAnswered:0,totalCorrect:0,sessions:0,subjectStats:{},highScore:0});
-  const [mastered,setMastered]       = React.useState(()=>store.get("paprep_mastered")||[]);
-  const [learnBank,setLearnBank]     = React.useState(()=>store.get("paprep_learn")||[]);
-  const [bank,setBank]               = React.useState([...SEED_QUESTIONS]);
-  const [studyMode,setStudyMode]     = React.useState(null);
+  // Core
+  const [screen,setScreen]             = React.useState("landing");
+  const [tab,setTab]                   = React.useState("study");
+  const [authMode,setAuthMode]         = React.useState("signup");
+  const [form,setForm]                 = React.useState({name:"",email:"",password:""});
+  const [formErr,setFormErr]           = React.useState("");
+  const [user,setUser]                 = React.useState(()=>store.get("paprep_user"));
+  const [loading,setLoading]           = React.useState(false);
+  const [loadMsg,setLoadMsg]           = React.useState("");
+
+  // User profile & progress
+  const [userProfile,setUserProfile]   = React.useState(()=>store.get("paprep_profile")||null);
+  const [prog,setProg]                 = React.useState(()=>store.get("paprep_prog")||{totalAnswered:0,totalCorrect:0,sessions:0,subjectStats:{},highScore:0,adaptiveLevel:{}});
+  const [mastered,setMastered]         = React.useState(()=>store.get("paprep_mastered")||[]);
+  const [learnBank,setLearnBank]       = React.useState(()=>store.get("paprep_learn")||[]);
+
+  // Question bank
+  const [bank,setBank]                 = React.useState([...SEED_QUESTIONS]);
+
+  // Study session state
+  const [studyMode,setStudyMode]       = React.useState(null);
   const [questionType,setQuestionType] = React.useState("mixed");
-  const [examType,setExamType]       = React.useState(null);
-  const [customTopic,setCustomTopic] = React.useState("");
+  const [examType,setExamType]         = React.useState(null);
+  const [customTopic,setCustomTopic]   = React.useState("");
   const [deepDiveTopic,setDeepDiveTopic] = React.useState("");
-  const [activeModule,setActiveModule]   = React.useState(null);
-  const [subject,setSubject]         = React.useState("All");
-  const [difficulty,setDiff]         = React.useState("All");
-  const [queue,setQueue]             = React.useState([]);
-  const [qIdx,setQIdx]               = React.useState(0);
-  const [picked,setPicked]           = React.useState(null);
-  const [fitbAnswer,setFitbAnswer]   = React.useState("");
-  const [fitbCorrect,setFitbCorrect] = React.useState(null);
-  const [freeText,setFreeText]       = React.useState("");
-  const [aiGrade,setAiGrade]         = React.useState(null);
+  const [currentLevel,setCurrentLevel] = React.useState("didactic");
+  const [activeModule,setActiveModule] = React.useState(null);
+  const [subject,setSubject]           = React.useState("All");
+  const [difficulty,setDiff]           = React.useState("All");
+
+  // Quiz state
+  const [queue,setQueue]               = React.useState([]);
+  const [qIdx,setQIdx]                 = React.useState(0);
+  const [picked,setPicked]             = React.useState(null);
+  const [fitbAnswer,setFitbAnswer]     = React.useState("");
+  const [fitbCorrect,setFitbCorrect]   = React.useState(null);
+  const [freeText,setFreeText]         = React.useState("");
+  const [aiGrade,setAiGrade]           = React.useState(null);
   const [gradingLoading,setGradingLoading] = React.useState(false);
-  const [revealed,setRevealed]       = React.useState(false);
-  const [score,setScore]             = React.useState(0);
-  const [strikes,setStrikes]         = React.useState(0);
-  const [answers,setAnswers]         = React.useState([]);
-  const [streak,setStreak]           = React.useState(0);
-  const [bestStreak,setBest]         = React.useState(0);
-  const [sessionStats,setStats]      = React.useState({});
-  const [animIn,setAnimIn]           = React.useState(true);
-  const [shaking,setShaking]         = React.useState(false);
-  const [timeLeft,setTimeLeft]       = React.useState(null);
-  const [examStarted,setExamStarted] = React.useState(false);
-  const [flashFlipped,setFlipped]    = React.useState(false);
-  const [flashIdx,setFlashIdx]       = React.useState(0);
-  const [bgFill,setBgFill]           = React.useState(false);
-  const [customQ,setCustomQ]         = React.useState("");
-  const [customCount,setCustomCount] = React.useState(30);
-  const [customTime,setCustomTime]   = React.useState(45);
-  const [labIdx,setLabIdx]           = React.useState(0);
-  const [labAnswered,setLabAnswered] = React.useState(false);
-  const [labInput,setLabInput]       = React.useState("");
+  const [revealed,setRevealed]         = React.useState(false);
+  const [score,setScore]               = React.useState(0);
+  const [strikes,setStrikes]           = React.useState(0);
+  const [answers,setAnswers]           = React.useState([]);
+  const [streak,setStreak]             = React.useState(0);
+  const [bestStreak,setBest]           = React.useState(0);
+  const [sessionStats,setStats]        = React.useState({});
+  const [animIn,setAnimIn]             = React.useState(true);
+  const [shaking,setShaking]           = React.useState(false);
+  const [timeLeft,setTimeLeft]         = React.useState(null);
+  const [examStarted,setExamStarted]   = React.useState(false);
+
+  // Flashcard state
+  const [flashFlipped,setFlipped]      = React.useState(false);
+  const [flashIdx,setFlashIdx]         = React.useState(0);
+
+  // Lab state
+  const [labIdx,setLabIdx]             = React.useState(0);
+  const [labAnswered,setLabAnswered]   = React.useState(false);
+  const [labInput,setLabInput]         = React.useState("");
+
+  // Custom topic state
+  const [customQ,setCustomQ]           = React.useState("");
+  const [customCount,setCustomCount]   = React.useState(30);
+  const [customTime,setCustomTime]     = React.useState(45);
+
+  // Learn mode state
+  const [learnMethod,setLearnMethod]   = React.useState(null);
+  const [learnContent,setLearnContent] = React.useState(null);
+  const [learnCards,setLearnCards]     = React.useState([]);
+  const [learnCardIdx,setLearnCardIdx] = React.useState(0);
+  const [learnCardFlipped,setLearnCardFlipped] = React.useState(false);
+  const [learnPhase,setLearnPhase]     = React.useState("content"); // content | quiz | tutor
+  const [tutorHistory,setTutorHistory] = React.useState([]);
+  const [tutorInput,setTutorInput]     = React.useState("");
+  const [tutorLoading,setTutorLoading] = React.useState(false);
+  const [bgFill,setBgFill]             = React.useState(false);
 
   const q = queue[qIdx];
   const isPro = user?.pro||false;
@@ -446,11 +416,24 @@ function App() {
   const overallPct = prog.totalAnswered ? Math.round((prog.totalCorrect/prog.totalAnswered)*100):0;
   const pct = queue.length ? Math.round((score/queue.length)*100):0;
 
+  // Adaptive level: get current difficulty based on performance
+  const getAdaptiveDifficulty = (topic) => {
+    const perfKey = topic || subject;
+    const perf = prog.adaptiveLevel?.[perfKey];
+    if(!perf) return difficulty||"Medium";
+    const pct = perf.correct/Math.max(perf.answered,1);
+    if(pct>=0.85) return "Hard";
+    if(pct>=0.65) return "Medium";
+    return "Easy";
+  };
+
   React.useEffect(()=>{store.set("paprep_prog",prog);},[prog]);
   React.useEffect(()=>{if(user)store.set("paprep_user",user);},[user]);
   React.useEffect(()=>{store.set("paprep_mastered",mastered);},[mastered]);
   React.useEffect(()=>{store.set("paprep_learn",learnBank);},[learnBank]);
+  React.useEffect(()=>{if(userProfile)store.set("paprep_profile",userProfile);},[userProfile]);
 
+  // Exam timer
   React.useEffect(()=>{
     if(screen!=="quiz"||studyMode!=="exam"||!examStarted||timeLeft===null)return;
     if(timeLeft<=0){endSession();return;}
@@ -458,51 +441,59 @@ function App() {
     return()=>clearTimeout(t);
   },[screen,studyMode,examStarted,timeLeft]);
 
+  // BG fill
   React.useEffect(()=>{
     if(bank.length<80&&!bgFill&&CONFIG.ANTHROPIC_KEY!=="YOUR_ANTHROPIC_API_KEY_HERE"){
       setBgFill(true);
-      Promise.all(SUBJECTS.slice(1).flatMap(s=>["mc","fitb","free"].map(t=>generateEliteQuestions({subject:s,difficulty:"Medium",count:2,questionType:t,used:bank}))))
+      Promise.all(SUBJECTS.slice(1).flatMap(s=>["mc","fitb"].map(t=>generateQuestions({subject:s,difficulty:"Medium",count:2,questionType:t,level:currentLevel,used:bank}))))
         .then(r=>{const nq=r.flat().map((q,i)=>({...q,id:Date.now()+i}));setBank(b=>[...b,...nq]);})
         .finally(()=>setBgFill(false));
     }
-  },[bank.length,bgFill]);
+  },[bank.length,bgFill,currentLevel]);
 
   const handleAuth=()=>{
     if(!form.email||!form.password){setFormErr("Please fill in all fields.");return;}
     if(authMode==="signup"&&!form.name){setFormErr("Please enter your name.");return;}
     const u={name:form.name||form.email.split("@")[0],email:form.email,pro:false};
-    setUser(u);setFormErr("");setScreen("dashboard");
+    setUser(u);setFormErr("");
+    // If no profile yet, go to onboarding
+    if(!store.get("paprep_profile")){setScreen("onboarding");}
+    else{setScreen("dashboard");}
   };
   const logout=()=>{store.set("paprep_user",null);setUser(null);setScreen("landing");};
   const activatePro=()=>{const u={...user,pro:true};setUser(u);store.set("paprep_user",u);};
 
-  // Filter bank by question type
-  const filterByType = (pool, qType) => {
-    if (qType === "mixed") return pool;
-    return pool.filter(q => (q.type||"mc") === qType);
+  // Save onboarding profile
+  const saveProfile=(profile)=>{
+    setUserProfile(profile);
+    setCurrentLevel(profile.level);
+    setScreen("dashboard");
   };
 
+  // Build question queue
   const buildQueue=async(mode,eType,cTopic,ddTopic,count=15)=>{
+    const adaptDiff = getAdaptiveDifficulty(ddTopic||cTopic||subject);
     let pool=[];
-    if(mode==="learn") pool=[...learnBank].sort(()=>Math.random()-0.5);
+    if(mode==="learn-quiz") pool=bank.filter(q=>(subject==="All"||q.subject===subject)).sort(()=>Math.random()-0.5);
+    else if(mode==="learnBank") pool=[...learnBank].sort(()=>Math.random()-0.5);
     else if(mode==="mastered") pool=[...mastered].sort(()=>Math.random()-0.5);
-    else{
-      pool=bank.filter(q=>(subject==="All"||q.subject===subject)&&(difficulty==="All"||q.difficulty===difficulty));
-      pool=filterByType(pool,questionType).sort(()=>Math.random()-0.5);
-    }
+    else pool=bank.filter(q=>(subject==="All"||q.subject===subject)&&(difficulty==="All"||q.difficulty===difficulty)).sort(()=>Math.random()-0.5);
 
     let finalCount=count;
     if(mode==="exam"){if(eType==="pance")finalCount=60;else if(eType==="boards")finalCount=120;else if(eType==="paschool")finalCount=50;else finalCount=customCount;}
     if(mode==="strikes")finalCount=999;
-    if(mode==="deepdive")finalCount=15;
+    if(mode==="deepdive"||mode==="learn-quiz")finalCount=10;
 
     let selected=pool.slice(0,Math.min(finalCount,pool.length));
     const needsAI=CONFIG.ANTHROPIC_KEY!=="YOUR_ANTHROPIC_API_KEY_HERE";
 
-    if((selected.length<Math.min(finalCount,15)||ddTopic)&&needsAI){
-      setLoadMsg(ddTopic?`Generating deep dive: "${ddTopic}"…`:"Generating questions…");
-      const needed=Math.min(finalCount,30)-selected.length+5;
-      const ai=await generateEliteQuestions({subject,difficulty,count:Math.max(needed,10),mode,questionType,examType:eType,customTopic:cTopic,deepDiveTopic:ddTopic,used:bank});
+    if((selected.length<Math.min(finalCount,10)||ddTopic||cTopic)&&needsAI){
+      const needed=Math.min(finalCount,25)-selected.length+5;
+      const ai=await generateQuestions({
+        subject,difficulty:difficulty==="All"?adaptDiff:difficulty,
+        count:Math.max(needed,8),questionType,
+        topic:ddTopic||cTopic||"",level:currentLevel,examType:eType,used:bank
+      });
       const withIds=ai.map((q,i)=>({...q,id:Date.now()+i}));
       setBank(b=>[...b,...withIds]);
       selected=[...selected,...withIds].slice(0,mode==="strikes"?999:finalCount);
@@ -522,53 +513,90 @@ function App() {
       if(mode==="exam"){const mins=eType==="pance"?60:eType==="boards"?120:eType==="paschool"?75:customTime;setTimeLeft(mins*60);setExamStarted(true);}
       setStudyMode(mode);setExamType(eType);setDeepDiveTopic(ddTopic);
       setTimeout(()=>{setAnimIn(true);setScreen("quiz");},80);
-    }catch(e){setLoadMsg("Error — please try again.");setTimeout(()=>setScreen("dashboard"),2000);}
+    }catch(e){setLoadMsg("Error — try again.");setTimeout(()=>setScreen("dashboard"),2000);}
     finally{setLoading(false);setLoadMsg("");}
   };
 
-  // Handle MC answer
+  // Start Learn mode
+  const startLearn=async(topic, method)=>{
+    if(hitLimit){setScreen("paywall");return;}
+    setLearnMethod(method);setLearnContent(null);setLearnCards([]);setLearnCardIdx(0);
+    setLearnCardFlipped(false);setLearnPhase("content");setTutorHistory([]);
+    setLoading(true);setLoadMsg(`Generating ${method==="tutor"?"AI tutor session":method==="guide"?"study guide":method==="flashcard"?"concept cards":"lesson"} on "${topic}"…`);
+    try{
+      if(method==="flashcard"){
+        const cards=await generateLesson(topic,currentLevel,"flashcard");
+        if(cards&&cards.length){setLearnCards(cards);setDeepDiveTopic(topic);setScreen("learn");}
+        else{setLoadMsg("Could not generate cards. Check API key.");setTimeout(()=>setScreen("dashboard"),2500);}
+      }else if(method==="tutor"){
+        const intro=await generateLesson(topic,currentLevel,"tutor");
+        setTutorHistory([{role:"assistant",content:intro||`Let's learn about ${topic}! What would you like to start with?`}]);
+        setDeepDiveTopic(topic);setScreen("learn");
+      }else{
+        const content=await generateLesson(topic,currentLevel,method);
+        if(content){setLearnContent(content);setDeepDiveTopic(topic);setScreen("learn");}
+        else{setLoadMsg("Could not generate content. Check API key.");setTimeout(()=>setScreen("dashboard"),2500);}
+      }
+    }catch(e){setLoadMsg("Error generating content.");setTimeout(()=>setScreen("dashboard"),2500);}
+    finally{setLoading(false);setLoadMsg("");}
+  };
+
+  // Handle tutor chat
+  const sendTutorMessage=async()=>{
+    if(!tutorInput.trim()||tutorLoading)return;
+    const msg=tutorInput.trim();setTutorInput("");
+    const newHistory=[...tutorHistory,{role:"user",content:msg}];
+    setTutorHistory(newHistory);setTutorLoading(true);
+    try{
+      const response=await tutorChat(deepDiveTopic,currentLevel,newHistory,msg);
+      setTutorHistory(h=>[...h,{role:"assistant",content:response}]);
+    }catch(e){setTutorHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong. Please try again."}]);}
+    finally{setTutorLoading(false);}
+  };
+
+  // Answer handlers
   const handlePickMC=(idx)=>{
     if(picked!==null||!q)return;
     setPicked(idx);setRevealed(true);
-    const ok=idx===q.answer;
-    recordAnswer(ok);
+    recordAnswer(idx===q.answer);
   };
-
-  // Handle FITB answer
-  const handleFITB=(userInput)=>{
+  const handleFITB=(input)=>{
     if(revealed||!q)return;
-    setFitbAnswer(userInput);setRevealed(true);
-    const correct = q.answerText && userInput.toLowerCase().trim().includes(q.answerText.toLowerCase().trim().split(" ")[0]);
-    setFitbCorrect(correct);
-    recordAnswer(correct);
+    setFitbAnswer(input);setRevealed(true);
+    const correct=q.answerText&&input.toLowerCase().trim().includes(q.answerText.toLowerCase().trim().split(" ")[0]);
+    setFitbCorrect(correct);recordAnswer(correct);
   };
-
-  // Handle Free Response submit
   const handleFreeSubmit=async(text)=>{
     if(revealed||!q)return;
     setFreeText(text);setGradingLoading(true);
     try{
       const grade=await gradeResponse(q.question,q.explanation,q.keyPoints,text);
-      setAiGrade(grade);setRevealed(true);
-      recordAnswer(grade.correct);
-    }catch(e){setAiGrade({score:null,feedback:"Could not grade — see model answer below.",correct:null});setRevealed(true);recordAnswer(null);}
+      setAiGrade(grade);setRevealed(true);recordAnswer(grade.correct);
+    }catch(e){setAiGrade({score:null,feedback:"Could not grade.",correct:null});setRevealed(true);recordAnswer(null);}
     finally{setGradingLoading(false);}
   };
 
   const recordAnswer=(ok)=>{
     if(ok===true){const ns=streak+1;setStreak(ns);if(ns>bestStreak)setBest(ns);setScore(s=>s+1);}
     else if(ok===false){setStreak(0);if(studyMode==="strikes"){const ns2=strikes+1;setStrikes(ns2);setShaking(true);setTimeout(()=>setShaking(false),500);if(ns2>=5)setTimeout(()=>endSession(),1500);}}
-    setAnswers(a=>[...a,{ok,subject:q.subject,question:q}]);
+    setAnswers(a=>[...a,{ok,subject:q?.subject,question:q}]);
     if(q){
       if(ok){setMastered(m=>{const e=m.find(x=>x.id===q.id);return e?m:[...m,q];});setLearnBank(l=>l.filter(x=>x.id!==q.id));}
       else if(ok===false){setLearnBank(l=>{const e=l.find(x=>x.id===q.id);return e?l:[...l,q];});}
     }
-    setProg(p=>{
-      const ss={...(p.subjectStats||{})};
-      if(!ss[q.subject])ss[q.subject]={answered:0,correct:0};
-      ss[q.subject].answered++;if(ok===true)ss[q.subject].correct++;
-      return{...p,totalAnswered:p.totalAnswered+1,totalCorrect:p.totalCorrect+(ok===true?1:0),subjectStats:ss};
-    });
+    // Adaptive tracking
+    if(q){
+      const key=deepDiveTopic||subject;
+      setProg(p=>{
+        const ss={...(p.subjectStats||{})};
+        if(!ss[q.subject])ss[q.subject]={answered:0,correct:0};
+        ss[q.subject].answered++;if(ok===true)ss[q.subject].correct++;
+        const al={...(p.adaptiveLevel||{})};
+        if(!al[key])al[key]={answered:0,correct:0};
+        al[key].answered++;if(ok===true)al[key].correct++;
+        return{...p,totalAnswered:p.totalAnswered+1,totalCorrect:p.totalCorrect+(ok===true?1:0),subjectStats:ss,adaptiveLevel:al};
+      });
+    }
     if(!isPro&&prog.totalAnswered+1>=CONFIG.FREE_LIMIT&&qIdx+1<queue.length)setTimeout(()=>setScreen("paywall"),1400);
   };
 
@@ -584,30 +612,63 @@ function App() {
   const nextQ=()=>{
     if(studyMode==="strikes"&&strikes>=5){endSession();return;}
     if(qIdx+1>=queue.length){endSession();}
-    else{
-      setAnimIn(false);
-      setTimeout(()=>{setQIdx(i=>i+1);setPicked(null);setFitbAnswer("");setFitbCorrect(null);setFreeText("");setAiGrade(null);setRevealed(false);setGradingLoading(false);setAnimIn(true);},200);
-    }
+    else{setAnimIn(false);setTimeout(()=>{setQIdx(i=>i+1);setPicked(null);setFitbAnswer("");setFitbCorrect(null);setFreeText("");setAiGrade(null);setRevealed(false);setGradingLoading(false);setAnimIn(true);},200);}
   };
-
   const formatTime=(s)=>`${Math.floor(s/60)}:${(s%60).toString().padStart(2,"0")}`;
 
-  // Question type selector component
-  const QTypeSelector = ()=>(
-    <div style={{marginBottom:20}}>
+  // Q Type Selector
+  const QTypeSelector=()=>(
+    <div style={{marginBottom:18}}>
       <span style={S.lbl}>Question Type</span>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {Q_TYPES.map(t=>(
           <button key={t.id} onClick={()=>setQuestionType(t.id)} style={{padding:"10px 12px",borderRadius:12,cursor:"pointer",textAlign:"left",transition:"all 0.15s",
             border:questionType===t.id?`1px solid ${t.color}`:"1px solid rgba(255,255,255,0.07)",
             background:questionType===t.id?`${t.color}15`:"rgba(255,255,255,0.03)"}}>
-            <div style={{fontSize:14,marginBottom:3}}>{t.icon} <span style={{fontWeight:700,color:questionType===t.id?t.color:"#dde6ff",fontSize:13}}>{t.label}</span></div>
+            <div style={{fontSize:13,fontWeight:700,color:questionType===t.id?t.color:"#dde6ff",marginBottom:2}}>{t.icon} {t.label}</div>
             <div style={{fontSize:11,color:"#4a5a7a"}}>{t.desc}</div>
           </button>
         ))}
       </div>
     </div>
   );
+
+  // Level Selector
+  const LevelSelector=({selected,onSelect})=>(
+    <div style={{marginBottom:18}}>
+      <span style={S.lbl}>Your Level</span>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {LEVELS.map(l=>(
+          <button key={l.id} onClick={()=>onSelect(l.id)} style={{padding:"10px 12px",borderRadius:12,cursor:"pointer",textAlign:"left",transition:"all 0.15s",
+            border:selected===l.id?`1px solid ${l.color}`:"1px solid rgba(255,255,255,0.07)",
+            background:selected===l.id?`${l.color}15`:"rgba(255,255,255,0.03)"}}>
+            <div style={{fontSize:14,marginBottom:2}}>{l.icon} <span style={{fontWeight:700,color:selected===l.id?l.color:"#dde6ff",fontSize:13}}>{l.label}</span></div>
+            <div style={{fontSize:10,color:"#4a5a7a",lineHeight:1.4}}>{l.desc}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // FITB renderer
+  const FITBRenderer=({q,revealed,fitbAnswer,onReveal})=>{
+    const [input,setInput]=React.useState("");
+    const parts=q.question.split("___");
+    return(
+      <div>
+        <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.9,marginBottom:18,color:"#dde6ff"}}>
+          {parts[0]}
+          {!revealed
+            ?<input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&input.trim()&&onReveal(input)}
+              placeholder="type answer…" style={{display:"inline-block",width:180,padding:"4px 10px",borderRadius:8,border:"1px solid rgba(132,94,194,0.5)",background:"rgba(132,94,194,0.1)",color:"#a8c0ff",fontSize:14,outline:"none",margin:"0 4px",verticalAlign:"middle"}}/>
+            :<span style={{display:"inline-block",padding:"4px 12px",borderRadius:8,background:fitbCorrect?"rgba(0,201,167,0.15)":"rgba(255,111,145,0.15)",color:fitbCorrect?"#00C9A7":"#FF6F91",fontWeight:700,margin:"0 4px",border:`1px solid ${fitbCorrect?"rgba(0,201,167,0.4)":"rgba(255,111,145,0.4)"}`}}>{fitbAnswer||"(not answered)"}</span>
+          }
+          {parts[1]}
+        </div>
+        {!revealed&&<button onClick={()=>onReveal(input)} disabled={!input.trim()} style={S.primaryBtn({background:"linear-gradient(135deg,#845EC2,#6a44aa)",opacity:input.trim()?1:0.5})}>Submit Answer →</button>}
+      </div>
+    );
+  };
 
   // ══════════════════════════════════════════════════════════════════════════
   // LANDING
@@ -627,10 +688,10 @@ function App() {
             ✦ Built for PA students, by a PA student
           </div>
           <h1 style={{fontSize:"clamp(2rem,6vw,3.4rem)",fontWeight:700,margin:"0 0 16px",lineHeight:1.1,background:"linear-gradient(145deg,#ffffff 0%,#b0c8ff 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
-            The elite PA school<br/>prep platform
+            Learn it. Practice it.<br/>Dominate your boards.
           </h1>
-          <p style={{color:"#5a6d94",fontSize:15,lineHeight:1.8,maxWidth:420,margin:"0 auto 28px"}}>
-            Board-quality AI questions in multiple choice, fill in the blank, and free response. 6 study modes. Deep Dive modules for every PA school subject.
+          <p style={{color:"#5a6d94",fontSize:15,lineHeight:1.8,maxWidth:440,margin:"0 auto 28px"}}>
+            The only PA prep platform that teaches AND tests. AI-powered learning in 4 formats, 3 question types, 8 study modes, and adaptive difficulty that grows with you.
           </p>
           <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"16px 40px",borderRadius:14,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:16,fontWeight:700,boxShadow:"0 8px 36px rgba(0,201,167,0.32)"}}>
             Start free — 10 questions on us →
@@ -638,27 +699,32 @@ function App() {
           <div style={{marginTop:10,fontSize:12,color:"#2a3a5a"}}>No credit card · Upgrade anytime</div>
         </div>
 
-        {/* Question type preview */}
-        <div style={{...S.card,marginBottom:24,borderColor:"rgba(0,201,167,0.15)"}}>
-          <span style={S.lbl}>3 Question Formats</span>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            {Q_TYPES.slice(0,3).map(t=>(
-              <div key={t.id} style={{padding:"12px 10px",borderRadius:10,background:`${t.color}10`,border:`1px solid ${t.color}25`,textAlign:"center"}}>
-                <div style={{fontSize:20,marginBottom:4}}>{t.icon}</div>
-                <div style={{fontSize:11,fontWeight:700,color:t.color}}>{t.label}</div>
-                <div style={{fontSize:10,color:"#4a5a7a",marginTop:3}}>{t.desc}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:24}}>
+          {[["8","Study Modes"],["3","Question Types"],["4","Learn Formats"],["7","Deep Dive Modules"]].map(([n,l])=>(
+            <div key={l} style={{...S.card,textAlign:"center",padding:"14px 8px"}}>
+              <div style={{fontSize:18,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
+              <div style={{fontSize:10,color:"#4a5a7a",marginTop:3}}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Learn mode highlight */}
+        <div style={{...S.card,marginBottom:20,borderColor:"rgba(0,201,167,0.2)",background:"rgba(0,201,167,0.03)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+            <div style={{fontSize:24}}>🧠</div>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:"#00C9A7"}}>Learn Mode — New</div>
+              <div style={{fontSize:12,color:"#4a5a7a"}}>AI teaches the concept first, then tests you</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {LEARN_METHODS.map(m=>(
+              <div key={m.id} style={{padding:"10px 12px",borderRadius:10,background:`${m.color}10`,border:`1px solid ${m.color}20`}}>
+                <div style={{fontSize:13}}>{m.icon} <span style={{fontWeight:700,color:m.color,fontSize:12}}>{m.label}</span></div>
+                <div style={{fontSize:10,color:"#4a5a7a",marginTop:2}}>{m.desc}</div>
               </div>
             ))}
           </div>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
-          {[["3","Question Types"],["6","Study Modes"],["7","Deep Dive Modules"]].map(([n,l])=>(
-            <div key={l} style={{...S.card,textAlign:"center",padding:"14px 8px"}}>
-              <div style={{fontSize:20,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
-              <div style={{fontSize:11,color:"#4a5a7a",marginTop:4}}>{l}</div>
-            </div>
-          ))}
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
@@ -666,7 +732,7 @@ function App() {
             <div style={{fontSize:11,color:"#4a5a7a",marginBottom:6,fontFamily:"monospace"}}>FREE</div>
             <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$0</div>
             <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>forever</div>
-            {["10 questions","All question types","Full explanations"].map(f=>(
+            {["10 questions","All question types","Learn mode preview"].map(f=>(
               <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:5,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
           </div>
@@ -675,15 +741,15 @@ function App() {
             <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
             <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
             <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · or $99/yr</div>
-            {["Unlimited AI questions","MC + FITB + Free Response","AI grading for free response","Deep Dive modules","Board-style exams","Custom topic generator"].map(f=>(
+            {["Unlimited AI questions","All 4 learn formats","AI tutor — chat to learn","Adaptive difficulty","Deep Dive all 49 subtopics","AI grading for free response"].map(f=>(
               <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:5,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
           </div>
         </div>
 
         <div style={{...S.card,textAlign:"center",borderColor:"rgba(0,201,167,0.2)",background:"rgba(0,201,167,0.04)",padding:24,marginBottom:32}}>
-          <h3 style={{margin:"0 0 8px",fontSize:18,color:"#dde6ff"}}>Ready to dominate your boards?</h3>
-          <p style={{color:"#4a5a7a",fontSize:13,margin:"0 0 16px"}}>Join PA students using AI to prepare smarter.</p>
+          <h3 style={{margin:"0 0 8px",fontSize:18,color:"#dde6ff"}}>Ready to actually learn this stuff?</h3>
+          <p style={{color:"#4a5a7a",fontSize:13,margin:"0 0 16px"}}>Join PA students using AI to learn smarter and score higher.</p>
           <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"13px 28px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:14,fontWeight:700}}>Create free account →</button>
         </div>
       </div>
@@ -709,13 +775,109 @@ function App() {
           {formErr&&<div style={{fontSize:12,color:"#FF6F91",marginBottom:12,textAlign:"center"}}>{formErr}</div>}
           <button onClick={handleAuth} style={S.primaryBtn()}>{authMode==="login"?"Sign in →":"Create account →"}</button>
           <div style={{textAlign:"center",marginTop:14,fontSize:12,color:"#4a5a7a"}}>
-            {authMode==="login"?"Don't have an account? ":"Already have an account? "}
+            {authMode==="login"?"No account? ":"Already have one? "}
             <span style={{color:"#00C9A7",cursor:"pointer"}} onClick={()=>setAuthMode(m=>m==="login"?"signup":"login")}>{authMode==="login"?"Sign up":"Sign in"}</span>
           </div>
         </div>
       </div>
     </div>
   );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ONBOARDING
+  // ══════════════════════════════════════════════════════════════════════════
+  if(screen==="onboarding") {
+    const [obStep,setObStep]           = React.useState(0);
+    const [obDegree,setObDegree]       = React.useState("");
+    const [obLevel,setObLevel]         = React.useState("didactic");
+    const [obKnowledge,setObKnowledge] = React.useState("");
+
+    const knowledgeOptions = [
+      {id:"beginner",    label:"Beginner",      icon:"🌱", desc:"Just starting out — need the fundamentals"},
+      {id:"intermediate",label:"Intermediate",  icon:"📈", desc:"Know the basics, building deeper knowledge"},
+      {id:"advanced",    label:"Advanced",      icon:"🔥", desc:"Strong foundation, refining and reinforcing"},
+      {id:"expert",      label:"Expert",        icon:"🏆", desc:"High-level knowledge, board prep focus"},
+    ];
+
+    const degreeOptions = [
+      "Bachelor's (Biology/Kinesiology/Health Science)","Bachelor's (Other)","Master's degree",
+      "Currently in undergrad","Post-baccalaureate","Other healthcare degree (RN, EMT, etc.)"
+    ];
+
+    return (
+      <div style={S.page}>
+        <div style={{...S.wrap,maxWidth:500}}>
+          <div style={{textAlign:"center",padding:"40px 0 28px"}}>
+            <Logo/>
+            <h2 style={{fontSize:20,fontWeight:700,color:"#dde6ff",margin:"16px 0 6px"}}>
+              {obStep===0?"Welcome! Let's personalize your experience":obStep===1?"What's your current level?":"How would you rate your knowledge?"}
+            </h2>
+            <p style={{color:"#4a5a7a",fontSize:13}}>
+              {obStep===0?"This helps us calibrate question difficulty and content":obStep===1?"We'll match the content depth to your stage":"AI will adapt difficulty as you improve"}
+            </p>
+          </div>
+
+          {/* Progress dots */}
+          <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:24}}>
+            {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i<=obStep?"#00C9A7":"rgba(255,255,255,0.1)",transition:"all 0.3s"}}/>)}
+          </div>
+
+          {/* Step 0 — Degree */}
+          {obStep===0&&(
+            <div>
+              <span style={S.lbl}>Your Degree / Background</span>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+                {degreeOptions.map(d=>(
+                  <button key={d} onClick={()=>setObDegree(d)} style={{padding:"12px 16px",borderRadius:11,cursor:"pointer",textAlign:"left",fontSize:13,
+                    border:obDegree===d?"1px solid #00C9A7":"1px solid rgba(255,255,255,0.07)",
+                    background:obDegree===d?"rgba(0,201,167,0.1)":"rgba(255,255,255,0.03)",
+                    color:obDegree===d?"#00C9A7":"#8a9dc0"}}>
+                    {obDegree===d?"✓ ":""}{d}
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>obDegree&&setObStep(1)} style={{...S.primaryBtn(),opacity:obDegree?1:0.4}}>Continue →</button>
+            </div>
+          )}
+
+          {/* Step 1 — Level */}
+          {obStep===1&&(
+            <div>
+              <LevelSelector selected={obLevel} onSelect={setObLevel}/>
+              <button onClick={()=>setObStep(2)} style={S.primaryBtn()}>Continue →</button>
+            </div>
+          )}
+
+          {/* Step 2 — Knowledge */}
+          {obStep===2&&(
+            <div>
+              <span style={S.lbl}>Knowledge Level in PA School Subjects</span>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
+                {knowledgeOptions.map(k=>(
+                  <button key={k.id} onClick={()=>setObKnowledge(k.id)} style={{padding:"14px 12px",borderRadius:12,cursor:"pointer",textAlign:"left",
+                    border:obKnowledge===k.id?"1px solid #00C9A7":"1px solid rgba(255,255,255,0.07)",
+                    background:obKnowledge===k.id?"rgba(0,201,167,0.1)":"rgba(255,255,255,0.03)"}}>
+                    <div style={{fontSize:20,marginBottom:4}}>{k.icon}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:obKnowledge===k.id?"#00C9A7":"#dde6ff",marginBottom:3}}>{k.label}</div>
+                    <div style={{fontSize:11,color:"#4a5a7a",lineHeight:1.4}}>{k.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>{
+                if(!obKnowledge)return;
+                // Set initial difficulty based on knowledge level
+                const diffMap={beginner:"Easy",intermediate:"Medium",advanced:"Medium",expert:"Hard"};
+                setDiff(diffMap[obKnowledge]||"Medium");
+                saveProfile({degree:obDegree,level:obLevel,knowledge:obKnowledge,completedAt:Date.now()});
+              }} style={{...S.primaryBtn(),opacity:obKnowledge?1:0.4}}>
+                Start Learning →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if(loading) return <Spinner msg={loadMsg}/>;
 
@@ -725,10 +887,10 @@ function App() {
   if(screen==="paywall") return (
     <div style={S.page}>
       <div style={{...S.wrap,maxWidth:480}}>
-        <div style={{textAlign:"center",padding:"52px 0 24px"}}>
+        <div style={{textAlign:"center",padding:"48px 0 24px"}}>
           <div style={{fontSize:48,marginBottom:14}}>🔒</div>
           <h2 style={{fontSize:22,fontWeight:700,color:"#dde6ff",margin:"0 0 10px"}}>You've used your {CONFIG.FREE_LIMIT} free questions</h2>
-          <p style={{color:"#4a5a7a",fontSize:14,lineHeight:1.8,margin:"0 auto 24px",maxWidth:340}}>Upgrade for unlimited AI questions in all three formats, AI grading, Deep Dive modules, and board-style exams.</p>
+          <p style={{color:"#4a5a7a",fontSize:14,lineHeight:1.8,margin:"0 auto 24px",maxWidth:340}}>Upgrade for unlimited AI questions, all Learn formats, AI tutor, adaptive difficulty, and Deep Dive modules.</p>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
           <div style={{...S.card,padding:22,textAlign:"center"}}>
@@ -752,49 +914,191 @@ function App() {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
+  // LEARN SCREEN
+  // ══════════════════════════════════════════════════════════════════════════
+  if(screen==="learn") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0 12px"}}>
+          <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Pill color={LEVELS.find(l=>l.id===currentLevel)?.color||"#00C9A7"}>{LEVELS.find(l=>l.id===currentLevel)?.label}</Pill>
+            <Pill color="#845EC2">{LEARN_METHODS.find(m=>m.id===learnMethod)?.label}</Pill>
+          </div>
+        </div>
+
+        <div style={{marginBottom:16}}>
+          <span style={S.lbl}>Learning</span>
+          <h2 style={{fontSize:"clamp(1rem,3vw,1.3rem)",fontWeight:700,color:"#dde6ff",lineHeight:1.4}}>{deepDiveTopic}</h2>
+        </div>
+
+        {/* ── LESSON + PRACTICE ── */}
+        {learnMethod==="lesson"&&learnContent&&(
+          <div>
+            {learnPhase==="content"?(
+              <div>
+                <div style={{...S.card,marginBottom:16,whiteSpace:"pre-wrap",fontSize:13,color:"#c0ccee",lineHeight:1.9,maxHeight:500,overflowY:"auto",animation:"fadeUp 0.3s ease"}}>
+                  {learnContent}
+                </div>
+                <button onClick={()=>{setLearnPhase("quiz");startStudy("learn-quiz","","",deepDiveTopic);}} style={S.primaryBtn()}>
+                  Ready — Test Me →
+                </button>
+              </div>
+            ):(
+              <div style={{textAlign:"center",padding:"20px 0"}}>
+                <div style={{fontSize:32,marginBottom:8}}>📝</div>
+                <p style={{color:"#4a5a7a",fontSize:13}}>Starting quiz on this topic…</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── STUDY GUIDE + QUIZ ── */}
+        {learnMethod==="guide"&&learnContent&&(
+          <div>
+            {learnPhase==="content"?(
+              <div>
+                <div style={{...S.card,marginBottom:16,whiteSpace:"pre-wrap",fontSize:13,color:"#c0ccee",lineHeight:1.9,maxHeight:520,overflowY:"auto",animation:"fadeUp 0.3s ease"}}>
+                  {learnContent}
+                </div>
+                <div style={{...S.card,marginBottom:14,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)"}}>
+                  <div style={{fontSize:12,color:"#00C9A7",fontWeight:700,marginBottom:4}}>💡 Study Tip</div>
+                  <div style={{fontSize:12,color:"#4a5a7a"}}>Read through the guide, then take the quiz. Your results will be added to your memory folders.</div>
+                </div>
+                <button onClick={()=>{setLearnPhase("quiz");startStudy("learn-quiz","","",deepDiveTopic);}} style={S.primaryBtn()}>
+                  Take the Quiz →
+                </button>
+              </div>
+            ):null}
+          </div>
+        )}
+
+        {/* ── CONCEPT FLASHCARDS ── */}
+        {learnMethod==="flashcard"&&learnCards.length>0&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+              <span style={{fontSize:12,color:"#4a5a7a",fontFamily:"monospace"}}>{learnCardIdx+1}/{learnCards.length}</span>
+              <PBar value={learnCardIdx+1} max={learnCards.length} color="#845EC2"/>
+            </div>
+            <div onClick={()=>setLearnCardFlipped(f=>!f)} style={{...S.card,minHeight:200,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",textAlign:"center",
+              borderColor:learnCardFlipped?"rgba(132,94,194,0.4)":"rgba(255,255,255,0.07)",
+              background:learnCardFlipped?"rgba(132,94,194,0.08)":"rgba(255,255,255,0.035)",
+              transition:"all 0.3s",marginBottom:16,padding:28,animation:"fadeUp 0.3s ease"}}>
+              {!learnCardFlipped?(
+                <div>
+                  <div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",marginBottom:12,letterSpacing:3}}>CONCEPT — TAP TO REVEAL</div>
+                  <div style={{fontSize:17,fontWeight:700,color:"#dde6ff"}}>{learnCards[learnCardIdx]?.front}</div>
+                </div>
+              ):(
+                <div>
+                  <div style={{fontSize:10,color:"#845EC2",fontFamily:"monospace",marginBottom:10,letterSpacing:3}}>EXPLANATION</div>
+                  <div style={{fontSize:13,color:"#c0ccee",lineHeight:1.7}}>{learnCards[learnCardIdx]?.back}</div>
+                </div>
+              )}
+            </div>
+            {learnCardFlipped&&(
+              <div style={{display:"flex",gap:10,marginBottom:16}}>
+                <button onClick={()=>{setLearnCardFlipped(false);if(learnCardIdx+1<learnCards.length)setLearnCardIdx(i=>i+1);else{setLearnPhase("quiz");startStudy("learn-quiz","","",deepDiveTopic);}}} style={{flex:1,padding:"13px",borderRadius:11,border:"none",cursor:"pointer",background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontSize:13,fontWeight:700}}>
+                  {learnCardIdx+1<learnCards.length?"Next Card →":"Take Quiz →"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── AI TUTOR ── */}
+        {learnMethod==="tutor"&&(
+          <div>
+            <div style={{...S.card,minHeight:300,maxHeight:450,overflowY:"auto",marginBottom:14,display:"flex",flexDirection:"column",gap:12,padding:16}}>
+              {tutorHistory.map((msg,i)=>(
+                <div key={i} style={{display:"flex",gap:10,animation:"fadeUp 0.2s ease",
+                  justifyContent:msg.role==="user"?"flex-end":"flex-start"}}>
+                  {msg.role==="assistant"&&<div style={{fontSize:20,flexShrink:0,marginTop:2}}>🤖</div>}
+                  <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:12,fontSize:13,lineHeight:1.7,
+                    background:msg.role==="user"?"rgba(0,201,167,0.15)":"rgba(255,255,255,0.04)",
+                    color:msg.role==="user"?"#00C9A7":"#c0ccee",
+                    border:msg.role==="user"?"1px solid rgba(0,201,167,0.3)":"1px solid rgba(255,255,255,0.07)"}}>
+                    {msg.content}
+                  </div>
+                  {msg.role==="user"&&<div style={{fontSize:20,flexShrink:0,marginTop:2}}>👤</div>}
+                </div>
+              ))}
+              {tutorLoading&&(
+                <div style={{display:"flex",gap:10}}>
+                  <div style={{fontSize:20}}>🤖</div>
+                  <div style={{padding:"10px 14px",borderRadius:12,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)"}}>
+                    <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#4a5a7a",animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite`}}/>)}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <input style={{...S.inp,flex:1}} value={tutorInput} onChange={e=>setTutorInput(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendTutorMessage()}
+                placeholder="Ask a question or request an explanation…"/>
+              <button onClick={sendTutorMessage} disabled={!tutorInput.trim()||tutorLoading} style={{padding:"13px 18px",borderRadius:11,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#FF6F91,#cc4466)",color:"#fff",fontSize:14,fontWeight:700,opacity:tutorInput.trim()&&!tutorLoading?1:0.5}}>→</button>
+            </div>
+            <button onClick={()=>{setLearnPhase("quiz");startStudy("learn-quiz","","",deepDiveTopic);}} style={{...S.primaryBtn({marginTop:12,background:"linear-gradient(135deg,#845EC2,#6a44aa)"})}}>
+              Test My Knowledge →
+            </button>
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}`}</style>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
   // DASHBOARD
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="dashboard") return (
     <div style={S.page}>
       <div style={S.wrap}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"22px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0"}}>
           <Logo/>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
             {isPro?<span style={{fontSize:10,padding:"4px 10px",borderRadius:99,background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontFamily:"monospace"}}>PRO ✦</span>
               :<button onClick={()=>setScreen("paywall")} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:12,fontWeight:700}}>Upgrade</button>}
             <button onClick={logout} style={{background:"none",border:"none",color:"#4a5a7a",fontSize:12,cursor:"pointer"}}>Log out</button>
           </div>
         </div>
 
-        <div style={{marginBottom:16}}>
+        <div style={{marginBottom:14}}>
           <span style={S.lbl}>Welcome back</span>
-          <h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>Hey, {user?.name?.split(" ")[0]} 👋</h2>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <h2 style={{fontSize:"clamp(1.2rem,4vw,1.6rem)",fontWeight:700,color:"#dde6ff"}}>Hey, {user?.name?.split(" ")[0]} 👋</h2>
+            {userProfile&&(
+              <button onClick={()=>setScreen("onboarding")} style={{fontSize:11,color:"#4a5a7a",background:"none",border:"1px solid rgba(255,255,255,0.07)",borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>
+                {LEVELS.find(l=>l.id===currentLevel)?.icon} {LEVELS.find(l=>l.id===currentLevel)?.label}
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
           {[[prog.totalAnswered,"Answered"],[prog.totalCorrect,"Correct"],[`${overallPct}%`,"Accuracy"],[`${prog.highScore||0}%`,"Best"]].map(([n,l])=>(
-            <div key={l} style={{...S.card,textAlign:"center",padding:"11px 6px"}}>
-              <div style={{fontSize:15,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
-              <div style={{fontSize:10,color:"#4a5a7a",marginTop:3}}>{l}</div>
+            <div key={l} style={{...S.card,textAlign:"center",padding:"10px 6px"}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
+              <div style={{fontSize:10,color:"#4a5a7a",marginTop:2}}>{l}</div>
             </div>
           ))}
         </div>
 
         {!isPro&&(
-          <div style={{...S.card,marginBottom:14,borderColor:hitLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
+          <div style={{...S.card,marginBottom:12,borderColor:hitLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontSize:12,color:"#8a9dc0"}}>Free questions used</span>
               <span style={{fontSize:12,color:hitLimit?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>{Math.min(prog.totalAnswered,CONFIG.FREE_LIMIT)}/{CONFIG.FREE_LIMIT}</span>
             </div>
             <PBar value={prog.totalAnswered} max={CONFIG.FREE_LIMIT} color={hitLimit?"#FF6F91":"#FFC75F"}/>
-            {hitLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:7,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
+            {hitLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:6,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
           </div>
         )}
 
         {/* Tabs */}
-        <div style={{display:"flex",gap:8,marginBottom:18,borderBottom:"1px solid rgba(255,255,255,0.07)",paddingBottom:10}}>
-          {[["study","Study"],["deepdive","🔬 Deep Dive"],["memory","📖 Memory"]].map(([id,label])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{padding:"7px 16px",borderRadius:20,fontSize:12,cursor:"pointer",border:"none",
+        <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:"1px solid rgba(255,255,255,0.07)",paddingBottom:10,overflowX:"auto"}}>
+          {[["study","📝 Study"],["learn","🧠 Learn"],["deepdive","🔬 Deep Dive"],["memory","📖 Memory"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{padding:"7px 14px",borderRadius:20,fontSize:12,cursor:"pointer",border:"none",whiteSpace:"nowrap",
               background:tab===id?"linear-gradient(135deg,#00C9A7,#009d84)":"rgba(255,255,255,0.05)",
               color:tab===id?"#fff":"#5a6d94",fontWeight:tab===id?700:400}}>
               {label}
@@ -806,21 +1110,28 @@ function App() {
         {tab==="study"&&(
           <div>
             <QTypeSelector/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-              {STUDY_MODES.map(m=>(
+            <div style={{marginBottom:14}}>
+              <span style={S.lbl}>Your Level</span>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {LEVELS.map(l=><FBtn key={l.id} label={`${l.icon} ${l.label}`} active={currentLevel===l.id} color={l.color} onClick={()=>setCurrentLevel(l.id)}/>)}
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+              {STUDY_MODES.filter(m=>m.id!=="learn").map(m=>(
                 <div key={m.id} onClick={()=>{
                   if(hitLimit){setScreen("paywall");return;}
                   if(m.id==="exam")setScreen("examSetup");
                   else if(m.id==="custom")setScreen("customSetup");
                   else if(m.id==="lab")setScreen("lab");
                   else if(m.id==="flashcard")startStudy("flashcard");
+                  else if(m.id==="practice")startStudy("infinite");
                   else startStudy(m.id);
                 }} style={{...S.card,cursor:"pointer",borderColor:`${m.color}20`,transition:"all 0.2s"}}
                   onMouseOver={e=>e.currentTarget.style.borderColor=`${m.color}50`}
                   onMouseOut={e=>e.currentTarget.style.borderColor=`${m.color}20`}>
-                  <div style={{fontSize:18,marginBottom:5}}>{m.icon}</div>
+                  <div style={{fontSize:18,marginBottom:4}}>{m.icon}</div>
                   <div style={{fontSize:12,fontWeight:700,color:m.color,marginBottom:2}}>{m.label}</div>
-                  <div style={{fontSize:11,color:"#4a5a7a",lineHeight:1.4}}>{m.desc}</div>
+                  <div style={{fontSize:10,color:"#4a5a7a",lineHeight:1.4}}>{m.desc}</div>
                 </div>
               ))}
             </div>
@@ -835,28 +1146,67 @@ function App() {
           </div>
         )}
 
+        {/* ── LEARN TAB ── */}
+        {tab==="learn"&&(
+          <div>
+            <div style={{marginBottom:16}}>
+              <span style={S.lbl}>Learn Mode</span>
+              <p style={{fontSize:13,color:"#4a5a7a",lineHeight:1.6,marginBottom:14}}>Choose a topic and how you want to learn it. AI teaches the material first, then tests you — calibrated to your level.</p>
+              <LevelSelector selected={currentLevel} onSelect={setCurrentLevel}/>
+            </div>
+
+            <span style={S.lbl}>How do you want to learn?</span>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+              {LEARN_METHODS.map(m=>(
+                <div key={m.id} onClick={()=>setLearnMethod(learnMethod===m.id?null:m.id)} style={{...S.card,cursor:"pointer",transition:"all 0.2s",
+                  borderColor:learnMethod===m.id?`${m.color}50`:`${m.color}15`,
+                  background:learnMethod===m.id?`${m.color}10`:"rgba(255,255,255,0.035)"}}>
+                  <div style={{fontSize:20,marginBottom:5}}>{m.icon}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:learnMethod===m.id?m.color:"#dde6ff",marginBottom:2}}>{m.label}</div>
+                  <div style={{fontSize:10,color:"#4a5a7a",lineHeight:1.4}}>{m.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            <span style={S.lbl}>Subject</span>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{SUBJECTS.slice(1).map(s=><FBtn key={s} label={s} active={subject===s} color={SC[s]} onClick={()=>setSubject(s)}/>)}</div>
+
+            <div style={{...S.card,marginBottom:14}}>
+              <span style={S.lbl}>Specific Topic (Optional)</span>
+              <input style={S.inp} placeholder="e.g. 'heart failure pathophysiology', 'beta-lactam antibiotics', 'thyroid disorders'…"
+                value={customQ} onChange={e=>setCustomQ(e.target.value)}/>
+            </div>
+
+            <button onClick={()=>{
+              if(!learnMethod){alert("Pick a learn format first.");return;}
+              const topic=customQ.trim()||subject||"PA school medicine";
+              startLearn(topic,learnMethod);
+            }} style={{...S.primaryBtn(),opacity:learnMethod?1:0.5}}>
+              {learnMethod?`Start ${LEARN_METHODS.find(m=>m.id===learnMethod)?.label} →`:"Select a Learn Format First"}
+            </button>
+          </div>
+        )}
+
         {/* ── DEEP DIVE TAB ── */}
         {tab==="deepdive"&&(
           <div>
             {!activeModule?(
               <div>
                 <div style={{marginBottom:14}}>
-                  <span style={S.lbl}>PA School Modules</span>
-                  <p style={{fontSize:13,color:"#4a5a7a",lineHeight:1.6}}>Drill deep into any PA school subject. AI generates targeted questions for each subtopic in your chosen format.</p>
+                  <span style={S.lbl}>Deep Dive Modules</span>
+                  <p style={{fontSize:13,color:"#4a5a7a",lineHeight:1.6}}>Each module has Learn and Practice modes. AI generates content calibrated to your level.</p>
                 </div>
-                <div style={{marginBottom:14}}>
-                  <QTypeSelector/>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <LevelSelector selected={currentLevel} onSelect={setCurrentLevel}/>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {DEEP_DIVE_MODULES.map(m=>(
                     <div key={m.id} onClick={()=>setActiveModule(m)} style={{...S.card,cursor:"pointer",borderColor:`${m.color}20`,transition:"all 0.2s",display:"flex",alignItems:"center",gap:12}}
                       onMouseOver={e=>e.currentTarget.style.borderColor=`${m.color}50`}
                       onMouseOut={e=>e.currentTarget.style.borderColor=`${m.color}20`}>
-                      <div style={{fontSize:26,flexShrink:0}}>{m.icon}</div>
+                      <div style={{fontSize:24,flexShrink:0}}>{m.icon}</div>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,fontWeight:700,color:m.color,marginBottom:2}}>{m.label}</div>
-                        <div style={{fontSize:12,color:"#4a5a7a"}}>{m.desc}</div>
-                        <div style={{fontSize:10,color:"#3a4a6a",marginTop:3,fontFamily:"monospace"}}>{m.subtopics.length} subtopics</div>
+                        <div style={{fontSize:11,color:"#4a5a7a"}}>{m.desc}</div>
+                        <div style={{fontSize:10,color:"#3a4a6a",marginTop:2,fontFamily:"monospace"}}>{m.subtopics.length} subtopics · Learn + Practice</div>
                       </div>
                       <span style={{fontSize:16,color:"#4a5a7a"}}>→</span>
                     </div>
@@ -865,25 +1215,52 @@ function App() {
               </div>
             ):(
               <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
                   <button onClick={()=>setActiveModule(null)} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button>
-                  <div style={{fontSize:16}}>{activeModule.icon}</div>
+                  <div style={{fontSize:18}}>{activeModule.icon}</div>
                   <div style={{fontSize:15,fontWeight:700,color:activeModule.color}}>{activeModule.label}</div>
                 </div>
                 <span style={S.lbl}>Choose a Subtopic</span>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {activeModule.subtopics.map(st=>(
-                    <div key={st.id} onClick={()=>{if(hitLimit){setScreen("paywall");return;}startStudy("deepdive","","",`${activeModule.label}: ${st.label}`);}}
-                      style={{...S.card,cursor:"pointer",padding:"13px 15px",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"space-between"}}
-                      onMouseOver={e=>e.currentTarget.style.borderColor=`${activeModule.color}40`}
-                      onMouseOut={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.07)"}>
-                      <div>
+                    <div key={st.id} style={{...S.card,borderColor:`${activeModule.color}15`}}>
+                      <div style={{marginBottom:10}}>
                         <div style={{fontSize:13,fontWeight:700,color:"#dde6ff",marginBottom:2}}>{st.label}</div>
-                        <div style={{fontSize:12,color:"#4a5a7a"}}>{st.desc}</div>
+                        <div style={{fontSize:11,color:"#4a5a7a"}}>{st.desc}</div>
                       </div>
-                      <span style={{fontSize:15,color:activeModule.color,marginLeft:10}}>→</span>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>{
+                          if(hitLimit){setScreen("paywall");return;}
+                          const topic=`${activeModule.label}: ${st.label}`;
+                          const method=learnMethod||"lesson";
+                          startLearn(topic,method);
+                        }} style={{flex:1,padding:"9px",borderRadius:9,border:"none",cursor:"pointer",background:`${activeModule.color}18`,color:activeModule.color,fontSize:12,fontWeight:700}}>
+                          🧠 Learn
+                        </button>
+                        <button onClick={()=>{
+                          if(hitLimit){setScreen("paywall");return;}
+                          startStudy("deepdive","","",`${activeModule.label}: ${st.label}`);
+                        }} style={{flex:1,padding:"9px",borderRadius:9,border:"none",cursor:"pointer",background:"rgba(255,255,255,0.05)",color:"#8a9dc0",fontSize:12,fontWeight:700}}>
+                          📝 Practice
+                        </button>
+                      </div>
                     </div>
                   ))}
+                </div>
+
+                {/* Learn method picker for deep dive */}
+                <div style={{...S.card,marginTop:14,borderColor:"rgba(0,201,167,0.15)"}}>
+                  <span style={S.lbl}>Learn Format for this Module</span>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    {LEARN_METHODS.map(m=>(
+                      <button key={m.id} onClick={()=>setLearnMethod(m.id)} style={{padding:"8px 10px",borderRadius:9,cursor:"pointer",textAlign:"left",fontSize:11,
+                        border:learnMethod===m.id?`1px solid ${m.color}`:"1px solid rgba(255,255,255,0.07)",
+                        background:learnMethod===m.id?`${m.color}15`:"rgba(255,255,255,0.03)",
+                        color:learnMethod===m.id?m.color:"#6a7a9a"}}>
+                        {m.icon} {m.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -894,25 +1271,25 @@ function App() {
         {tab==="memory"&&(
           <div>
             <span style={S.lbl}>Memory Folders</span>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
               <div style={{...S.card,borderColor:"rgba(0,201,167,0.2)",cursor:mastered.length>0?"pointer":"default"}} onClick={()=>mastered.length>0&&startStudy("mastered")}>
                 <div style={{fontSize:22,marginBottom:5}}>✅</div>
                 <div style={{fontSize:13,fontWeight:700,color:"#00C9A7",marginBottom:2}}>Mastered</div>
                 <div style={{fontSize:12,color:"#4a5a7a"}}>{mastered.length} questions</div>
-                {mastered.length>0&&<div style={{fontSize:11,color:"#00C9A7",marginTop:5}}>Tap to review →</div>}
+                {mastered.length>0&&<div style={{fontSize:11,color:"#00C9A7",marginTop:4}}>Tap to review →</div>}
               </div>
-              <div style={{...S.card,borderColor:"rgba(255,111,145,0.2)",cursor:learnBank.length>0?"pointer":"default"}} onClick={()=>learnBank.length>0&&startStudy("learn")}>
+              <div style={{...S.card,borderColor:"rgba(255,111,145,0.2)",cursor:learnBank.length>0?"pointer":"default"}} onClick={()=>learnBank.length>0&&startStudy("learnBank")}>
                 <div style={{fontSize:22,marginBottom:5}}>📖</div>
                 <div style={{fontSize:13,fontWeight:700,color:"#FF6F91",marginBottom:2}}>Learn</div>
                 <div style={{fontSize:12,color:"#4a5a7a"}}>{learnBank.length} questions</div>
-                {learnBank.length>0&&<div style={{fontSize:11,color:"#FF6F91",marginTop:5}}>Tap to review →</div>}
+                {learnBank.length>0&&<div style={{fontSize:11,color:"#FF6F91",marginTop:4}}>Tap to review →</div>}
               </div>
             </div>
             {Object.keys(prog.subjectStats||{}).length>0&&(
               <div style={S.card}>
                 <span style={S.lbl}>Performance by Subject</span>
                 {Object.entries(prog.subjectStats).map(([s,{answered,correct}])=>(
-                  <div key={s} style={{marginBottom:12}}>
+                  <div key={s} style={{marginBottom:11}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                       <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
                       <span style={{fontSize:12,color:SC[s]||"#00C9A7",fontFamily:"monospace"}}>{correct}/{answered} ({Math.round(correct/answered*100)}%)</span>
@@ -925,28 +1302,29 @@ function App() {
           </div>
         )}
 
-        {bgFill&&<div style={{textAlign:"center",marginTop:14,fontSize:11,color:"#2a3a5a",fontFamily:"monospace"}}>⚡ AI expanding bank…</div>}
+        {bgFill&&<div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#2a3a5a",fontFamily:"monospace"}}>⚡ AI expanding bank…</div>}
       </div>
     </div>
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  // EXAM SETUP
+  // EXAM / CUSTOM SETUP
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="examSetup") return (
     <div style={S.page}>
       <div style={S.wrap}>
         <div style={{padding:"22px 0 8px"}}><button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button></div>
-        <div style={{marginBottom:18}}><span style={S.lbl}>Choose Your Exam</span><h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>Practice Exam</h2></div>
+        <div style={{marginBottom:16}}><span style={S.lbl}>Practice Exam</span><h2 style={{fontSize:"clamp(1.2rem,4vw,1.6rem)",fontWeight:700,color:"#dde6ff"}}>Choose Your Exam</h2></div>
         <QTypeSelector/>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <LevelSelector selected={currentLevel} onSelect={setCurrentLevel}/>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {EXAM_TYPES.map(et=>(
             <div key={et.id} onClick={()=>{if(et.id==="custom")setScreen("customExamSetup");else{setSubject("All");setDiff("All");startStudy("exam",et.id);}}}
               style={{...S.card,cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"space-between"}}
               onMouseOver={e=>e.currentTarget.style.borderColor="rgba(0,201,167,0.3)"}
               onMouseOut={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.07)"}>
-              <div><div style={{fontSize:14,fontWeight:700,color:"#dde6ff",marginBottom:3}}>{et.label}</div><div style={{fontSize:12,color:"#4a5a7a"}}>{et.desc}</div></div>
-              <span style={{fontSize:18,color:"#4a5a7a"}}>→</span>
+              <div><div style={{fontSize:13,fontWeight:700,color:"#dde6ff",marginBottom:2}}>{et.label}</div><div style={{fontSize:11,color:"#4a5a7a"}}>{et.desc}</div></div>
+              <span style={{fontSize:16,color:"#4a5a7a"}}>→</span>
             </div>
           ))}
         </div>
@@ -958,13 +1336,13 @@ function App() {
     <div style={S.page}>
       <div style={S.wrap}>
         <div style={{padding:"22px 0 8px"}}><button onClick={()=>setScreen("examSetup")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button></div>
-        <div style={{marginBottom:18}}><span style={S.lbl}>Custom Exam</span><h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>Build Your Exam</h2></div>
+        <div style={{marginBottom:16}}><span style={S.lbl}>Custom Exam</span><h2 style={{fontSize:"clamp(1.2rem,4vw,1.6rem)",fontWeight:700,color:"#dde6ff"}}>Build Your Exam</h2></div>
         <QTypeSelector/>
-        <div style={{...S.card,marginBottom:12}}><span style={S.lbl}>Number of Questions</span><input type="number" style={S.inp} value={customCount} onChange={e=>setCustomCount(parseInt(e.target.value)||30)} min="5" max="200"/></div>
-        <div style={{...S.card,marginBottom:12}}><span style={S.lbl}>Time Limit (minutes)</span><input type="number" style={S.inp} value={customTime} onChange={e=>setCustomTime(parseInt(e.target.value)||45)} min="5" max="240"/></div>
-        <div style={{marginBottom:12}}><span style={S.lbl}>Subject</span><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{SUBJECTS.map(s=><FBtn key={s} label={s} active={subject===s} color={s==="All"?"#00C9A7":SC[s]} onClick={()=>setSubject(s)}/>)}</div></div>
-        <div style={{marginBottom:20}}><span style={S.lbl}>Difficulty</span><div style={{display:"flex",gap:6}}>{["All",...DIFFS].map(d=><FBtn key={d} label={d} active={difficulty===d} color={d==="All"?"#a8c0ff":DC[d]} onClick={()=>setDiff(d)}/>)}</div></div>
-        <button onClick={()=>startStudy("exam","custom")} style={S.primaryBtn()}>Start Custom Exam →</button>
+        <div style={{...S.card,marginBottom:10}}><span style={S.lbl}>Questions</span><input type="number" style={S.inp} value={customCount} onChange={e=>setCustomCount(parseInt(e.target.value)||30)} min="5" max="200"/></div>
+        <div style={{...S.card,marginBottom:10}}><span style={S.lbl}>Time Limit (minutes)</span><input type="number" style={S.inp} value={customTime} onChange={e=>setCustomTime(parseInt(e.target.value)||45)} min="5" max="240"/></div>
+        <div style={{marginBottom:10}}><span style={S.lbl}>Subject</span><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{SUBJECTS.map(s=><FBtn key={s} label={s} active={subject===s} color={s==="All"?"#00C9A7":SC[s]} onClick={()=>setSubject(s)}/>)}</div></div>
+        <div style={{marginBottom:18}}><span style={S.lbl}>Difficulty</span><div style={{display:"flex",gap:6}}>{["All",...DIFFS].map(d=><FBtn key={d} label={d} active={difficulty===d} color={d==="All"?"#a8c0ff":DC[d]} onClick={()=>setDiff(d)}/>)}</div></div>
+        <button onClick={()=>startStudy("exam","custom")} style={S.primaryBtn()}>Start Exam →</button>
       </div>
     </div>
   );
@@ -973,18 +1351,18 @@ function App() {
     <div style={S.page}>
       <div style={S.wrap}>
         <div style={{padding:"22px 0 8px"}}><button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button></div>
-        <div style={{marginBottom:18}}>
+        <div style={{marginBottom:16}}>
           <span style={S.lbl}>Custom AI Topic</span>
-          <h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>What do you want to study?</h2>
-          <p style={{color:"#4a5a7a",fontSize:13,marginTop:8,lineHeight:1.6}}>Type any topic. AI generates targeted questions in your chosen format.</p>
+          <h2 style={{fontSize:"clamp(1.2rem,4vw,1.6rem)",fontWeight:700,color:"#dde6ff"}}>What do you want to study?</h2>
         </div>
         <QTypeSelector/>
+        <LevelSelector selected={currentLevel} onSelect={setCurrentLevel}/>
         <div style={{...S.card,marginBottom:14}}>
           <span style={S.lbl}>Your Topic</span>
-          <textarea style={{...S.inp,height:90,resize:"vertical"}} placeholder="e.g. 'heart failure management', 'beta-lactam antibiotics', 'COPD exacerbation'..." value={customQ} onChange={e=>setCustomQ(e.target.value)}/>
+          <textarea style={{...S.inp,height:90,resize:"vertical"}} placeholder="e.g. 'heart failure management', 'beta-lactam antibiotics'…" value={customQ} onChange={e=>setCustomQ(e.target.value)}/>
         </div>
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
-          {["Easy","Medium","Hard","Mixed"].map(d=><FBtn key={d} label={d} active={difficulty===(d==="Mixed"?"All":d)} color={d==="Mixed"?"#a8c0ff":DC[d]||"#a8c0ff"} onClick={()=>setDiff(d==="Mixed"?"All":d)}/>)}
+        <div style={{display:"flex",gap:8,marginBottom:18}}>
+          {["Easy","Medium","Hard","Adaptive"].map(d=><FBtn key={d} label={d} active={difficulty===(d==="Adaptive"?"All":d)} color={d==="Adaptive"?"#a8c0ff":DC[d]||"#a8c0ff"} onClick={()=>setDiff(d==="Adaptive"?"All":d)}/>)}
         </div>
         <button onClick={()=>{if(customQ.trim())startStudy("custom","",customQ);}} style={{...S.primaryBtn(),opacity:customQ.trim()?1:0.5}}>Generate Questions →</button>
       </div>
@@ -1001,20 +1379,17 @@ function App() {
           <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
           <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{labIdx+1}/{ANATOMY_ITEMS.length}</span>
         </div>
-        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}>
-          <div style={{height:"100%",width:`${((labIdx+1)/ANATOMY_ITEMS.length)*100}%`,background:"linear-gradient(90deg,#FF9F43,#FF6F91)",borderRadius:99}}/>
-        </div>
+        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:16}}><div style={{height:"100%",width:`${((labIdx+1)/ANATOMY_ITEMS.length)*100}%`,background:"linear-gradient(90deg,#FF9F43,#FF6F91)",borderRadius:99}}/></div>
         {(()=>{
           const item=ANATOMY_ITEMS[labIdx];
           return(
             <div>
               <div style={{display:"flex",gap:7,marginBottom:12}}><Pill color="#FF9F43">{item.category}</Pill><Pill color={item.level==="boards"?"#FF6F91":item.level==="paschool"?"#FFC75F":"#00C9A7"}>{item.level}</Pill></div>
-              <h3 style={{fontSize:15,color:"#dde6ff",marginBottom:14,lineHeight:1.5}}>{item.question}</h3>
-              <div style={{borderRadius:12,overflow:"hidden",marginBottom:14,border:"1px solid rgba(255,255,255,0.07)"}}><img src={item.image} alt={item.label} style={{width:"100%",display:"block",background:"rgba(255,255,255,0.05)"}} onError={e=>e.target.style.display="none"}/></div>
+              <h3 style={{fontSize:15,color:"#dde6ff",marginBottom:12,lineHeight:1.5}}>{item.question}</h3>
+              <div style={{borderRadius:12,overflow:"hidden",marginBottom:12,border:"1px solid rgba(255,255,255,0.07)"}}><img src={item.image} alt={item.label} style={{width:"100%",display:"block"}} onError={e=>e.target.style.display="none"}/></div>
               {!labAnswered?(
                 <div>
-                  <span style={S.lbl}>Your Answer</span>
-                  <input style={{...S.inp,marginBottom:10}} placeholder="Type your answer..." value={labInput} onChange={e=>setLabInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setLabAnswered(true)}/>
+                  <input style={{...S.inp,marginBottom:10}} placeholder="Type your answer…" value={labInput} onChange={e=>setLabInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setLabAnswered(true)}/>
                   <button onClick={()=>setLabAnswered(true)} style={S.primaryBtn()}>Reveal Answer →</button>
                 </div>
               ):(
@@ -1047,24 +1422,15 @@ function App() {
           <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
           <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{flashIdx+1}/{queue.length}</span>
         </div>
-        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}>
-          <div style={{height:"100%",width:`${((flashIdx+1)/queue.length)*100}%`,background:"linear-gradient(90deg,#845EC2,#00C9A7)",borderRadius:99}}/>
-        </div>
+        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}><div style={{height:"100%",width:`${((flashIdx+1)/queue.length)*100}%`,background:"linear-gradient(90deg,#845EC2,#00C9A7)",borderRadius:99}}/></div>
         {queue[flashIdx]&&(()=>{
           const fq=queue[flashIdx];
           return(
             <div>
               <div style={{display:"flex",gap:7,marginBottom:12}}><Pill color={SC[fq.subject]||"#00C9A7"}>{fq.subject}</Pill><Pill color={DC[fq.difficulty]}>{fq.difficulty}</Pill></div>
               <div onClick={()=>setFlipped(f=>!f)} style={{...S.card,minHeight:180,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",textAlign:"center",borderColor:flashFlipped?"rgba(0,201,167,0.3)":"rgba(255,255,255,0.07)",background:flashFlipped?"rgba(0,201,167,0.05)":"rgba(255,255,255,0.035)",transition:"all 0.3s",marginBottom:14,padding:24}}>
-                {!flashFlipped?(
-                  <div><div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",marginBottom:10,letterSpacing:3}}>TAP TO REVEAL</div><div style={{fontSize:14,lineHeight:1.7,color:"#dde6ff"}}>{fq.question}</div></div>
-                ):(
-                  <div>
-                    <div style={{fontSize:10,color:"#00C9A7",fontFamily:"monospace",marginBottom:8,letterSpacing:3}}>ANSWER</div>
-                    <div style={{fontSize:17,fontWeight:700,color:"#00C9A7",marginBottom:8}}>{fq.answerText||(fq.options&&fq.options[fq.answer])}</div>
-                    <div style={{fontSize:12,color:"#7a8db0",lineHeight:1.6}}>{fq.explanation}</div>
-                  </div>
-                )}
+                {!flashFlipped?<div><div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",marginBottom:10,letterSpacing:3}}>TAP TO REVEAL</div><div style={{fontSize:14,lineHeight:1.7,color:"#dde6ff"}}>{fq.question}</div></div>
+                :<div><div style={{fontSize:10,color:"#00C9A7",fontFamily:"monospace",marginBottom:8,letterSpacing:3}}>ANSWER</div><div style={{fontSize:16,fontWeight:700,color:"#00C9A7",marginBottom:8}}>{fq.answerText||(fq.options&&fq.options[fq.answer])}</div><div style={{fontSize:12,color:"#7a8db0",lineHeight:1.6}}>{fq.explanation}</div></div>}
               </div>
               {flashFlipped&&(
                 <div style={{display:"flex",gap:10}}>
@@ -1080,168 +1446,116 @@ function App() {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  // QUIZ — ALL QUESTION TYPES
+  // QUIZ
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="quiz"&&q) return (
     <div style={S.page}>
       <div style={S.wrap}>
-        {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 0 6px"}}>
           <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            {studyMode==="strikes"&&<div style={{display:"flex",gap:2}}>{[0,1,2,3,4].map(i=><span key={i} style={{fontSize:13,opacity:i<strikes?1:0.2}}>{i<strikes?"💀":"❤️"}</span>)}</div>}
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {studyMode==="strikes"&&<div style={{display:"flex",gap:2}}>{[0,1,2,3,4].map(i=><span key={i} style={{fontSize:12,opacity:i<strikes?1:0.2}}>{i<strikes?"💀":"❤️"}</span>)}</div>}
             {studyMode==="exam"&&timeLeft!==null&&<span style={{fontSize:13,color:timeLeft<300?"#FF6F91":"#FFC75F",fontFamily:"monospace",fontWeight:700}}>{formatTime(timeLeft)}</span>}
-            {streak>=2&&<span style={{fontSize:12,color:"#FFC75F",fontFamily:"monospace"}}>🔥{streak}</span>}
-            <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{qIdx+1}{queue.length<500?"/"+queue.length:""}</span>
-            <span style={{fontSize:12,color:"#00C9A7",fontFamily:"monospace"}}>{score}✓</span>
+            {streak>=2&&<span style={{fontSize:11,color:"#FFC75F",fontFamily:"monospace"}}>🔥{streak}</span>}
+            <span style={{fontSize:12,color:"#4a5a7a",fontFamily:"monospace"}}>{qIdx+1}{queue.length<500?"/"+queue.length:""}</span>
+            <span style={{fontSize:11,color:"#00C9A7",fontFamily:"monospace"}}>{score}✓</span>
           </div>
         </div>
 
-        {queue.length<500&&(
-          <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}>
-            <div style={{height:"100%",width:`${(qIdx/queue.length)*100}%`,background:"linear-gradient(90deg,#00C9A7,#845EC2)",borderRadius:99,transition:"width 0.5s"}}/>
-          </div>
-        )}
+        {queue.length<500&&<div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:16}}><div style={{height:"100%",width:`${(qIdx/queue.length)*100}%`,background:"linear-gradient(90deg,#00C9A7,#845EC2)",borderRadius:99,transition:"width 0.5s"}}/></div>}
 
         <div style={{opacity:animIn?1:0,transform:animIn?"translateY(0)":"translateY(14px)",transition:"all 0.28s ease",animation:shaking?"shake 0.3s ease":""}}>
-          {/* Badges */}
-          <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
             <Pill color={SC[q.subject]||"#00C9A7"}>{q.subject}</Pill>
             <Pill color={DC[q.difficulty]}>{q.difficulty}</Pill>
             <QTypeBadge type={q.type||"mc"}/>
             {q.ai&&<Pill color="#a8c0ff">AI ✦</Pill>}
             {deepDiveTopic&&<Pill color="#845EC2">Deep Dive</Pill>}
+            <Pill color={LEVELS.find(l=>l.id===currentLevel)?.color||"#4D8AF0"}>{LEVELS.find(l=>l.id===currentLevel)?.label}</Pill>
           </div>
 
-          {/* ── MULTIPLE CHOICE ── */}
+          {/* MULTIPLE CHOICE */}
           {(q.type==="mc"||!q.type)&&(
             <div>
-              <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.8,marginBottom:18,color:"#dde6ff"}}>{q.question}</div>
+              <div style={{fontSize:"clamp(0.93rem,3vw,1.08rem)",lineHeight:1.8,marginBottom:16,color:"#dde6ff"}}>{q.question}</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {q.options.map((opt,idx)=>{
                   const isSel=picked===idx,isCorr=idx===q.answer;
                   let bg="rgba(255,255,255,0.03)",border="1px solid rgba(255,255,255,0.07)",color="#8a9dc0",icon="";
                   if(revealed){if(isCorr){bg="rgba(0,201,167,0.1)";border="1px solid rgba(0,201,167,0.5)";color="#00C9A7";icon="✓ ";}else if(isSel){bg="rgba(255,111,145,0.1)";border="1px solid rgba(255,111,145,0.5)";color="#FF6F91";icon="✗ ";}}
-                  return(
-                    <button key={idx} onClick={()=>handlePickMC(idx)} style={{background:bg,border,borderRadius:11,padding:"13px 15px",color,textAlign:"left",cursor:revealed?"default":"pointer",fontSize:14,lineHeight:1.5,transition:"all 0.18s"}}>
-                      <span style={{fontFamily:"monospace",marginRight:8,opacity:0.35,fontSize:11}}>{String.fromCharCode(65+idx)}.</span>{icon}{opt}
-                    </button>
-                  );
+                  return <button key={idx} onClick={()=>handlePickMC(idx)} style={{background:bg,border,borderRadius:11,padding:"12px 14px",color,textAlign:"left",cursor:revealed?"default":"pointer",fontSize:13,lineHeight:1.5,transition:"all 0.18s"}}>
+                    <span style={{fontFamily:"monospace",marginRight:7,opacity:0.35,fontSize:11}}>{String.fromCharCode(65+idx)}.</span>{icon}{opt}
+                  </button>;
                 })}
               </div>
             </div>
           )}
 
-          {/* ── FILL IN THE BLANK ── */}
-          {q.type==="fitb"&&(
-            <FITBQuestion
-              question={q.question}
-              revealed={revealed}
-              userAnswer={fitbAnswer}
-              onReveal={handleFITB}
-            />
+          {/* FILL IN THE BLANK */}
+          {q.type==="fitb"&&<FITBRenderer q={q} revealed={revealed} fitbAnswer={fitbAnswer} onReveal={handleFITB}/>}
+
+          {/* FREE RESPONSE */}
+          {q.type==="free"&&!revealed&&(
+            <div>
+              <div style={{fontSize:"clamp(0.93rem,3vw,1.08rem)",lineHeight:1.8,marginBottom:14,color:"#dde6ff"}}>{q.question}</div>
+              <span style={S.lbl}>Your Response</span>
+              <textarea value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Write your clinical answer here. Be thorough — AI will grade it."
+                style={{...S.inp,minHeight:130,resize:"vertical",marginBottom:8,lineHeight:1.6}}/>
+              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10,textAlign:"right",fontFamily:"monospace"}}>{freeText.split(" ").filter(Boolean).length} words</div>
+              <button onClick={()=>freeText.trim()&&!gradingLoading&&handleFreeSubmit(freeText)} disabled={!freeText.trim()||gradingLoading}
+                style={S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)",opacity:freeText.trim()&&!gradingLoading?1:0.5})}>
+                {gradingLoading?"AI Grading…":"Submit for AI Grading →"}
+              </button>
+              {gradingLoading&&<div style={{textAlign:"center",marginTop:12}}><div style={{width:28,height:28,borderRadius:"50%",border:"3px solid rgba(255,111,145,0.15)",borderTopColor:"#FF6F91",animation:"spin 0.8s linear infinite",margin:"0 auto 6px"}}/><div style={{fontSize:11,color:"#4a5a7a",fontFamily:"monospace"}}>AI grading your response…</div></div>}
+            </div>
           )}
 
-          {/* ── FREE RESPONSE ── */}
-          {q.type==="free"&&(
-            <FreeResponseQuestion
-              question={q.question}
-              onSubmit={handleFreeSubmit}
-              revealed={revealed}
-              aiGrade={aiGrade}
-              loading={gradingLoading}
-            />
-          )}
-
-          {/* ── EXPLANATION (shown after answer) ── */}
+          {/* EXPLANATION */}
           {revealed&&!gradingLoading&&(
-            <div style={{marginTop:16,animation:"fadeUp 0.25s ease"}}>
-
-              {/* AI Grade for free response */}
-              {q.type==="free"&&aiGrade&&(
-                <div style={{...S.card,marginBottom:12,
-                  borderColor:aiGrade.correct===true?"rgba(0,201,167,0.3)":aiGrade.correct===false?"rgba(255,111,145,0.3)":"rgba(255,199,95,0.3)",
-                  background:aiGrade.correct===true?"rgba(0,201,167,0.05)":aiGrade.correct===false?"rgba(255,111,145,0.05)":"rgba(255,199,95,0.05)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <div style={{fontSize:10,letterSpacing:3,color:aiGrade.correct===true?"#00C9A7":aiGrade.correct===false?"#FF6F91":"#FFC75F",textTransform:"uppercase",fontFamily:"monospace"}}>
-                      AI Grade
-                    </div>
-                    {aiGrade.score!==null&&(
-                      <div style={{fontSize:22,fontWeight:700,color:aiGrade.correct===true?"#00C9A7":aiGrade.correct===false?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>
-                        {aiGrade.score}% {aiGrade.grade&&`· ${aiGrade.grade}`}
-                      </div>
-                    )}
-                  </div>
-                  {aiGrade.feedback&&<p style={{fontSize:13,color:"#c0ccee",lineHeight:1.7,margin:"0 0 8px"}}>{aiGrade.feedback}</p>}
-                  {aiGrade.strengths&&aiGrade.strengths.length>0&&(
-                    <div style={{marginBottom:8}}>
-                      <div style={{fontSize:10,color:"#00C9A7",fontFamily:"monospace",letterSpacing:2,marginBottom:5}}>STRENGTHS</div>
-                      {aiGrade.strengths.map((s,i)=><div key={i} style={{fontSize:12,color:"#5a7a5a",marginBottom:3}}>✓ {s}</div>)}
-                    </div>
-                  )}
-                  {aiGrade.missedPoints&&aiGrade.missedPoints.length>0&&(
-                    <div>
-                      <div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:5}}>MISSED POINTS</div>
-                      {aiGrade.missedPoints.map((s,i)=><div key={i} style={{fontSize:12,color:"#7a5a5a",marginBottom:3}}>• {s}</div>)}
-                    </div>
-                  )}
-                </div>
-              )}
-
+            <div style={{marginTop:14,animation:"fadeUp 0.25s ease"}}>
               {/* FITB result */}
               {q.type==="fitb"&&(
-                <div style={{...S.card,marginBottom:12,borderColor:fitbCorrect?"rgba(0,201,167,0.3)":"rgba(255,111,145,0.3)",background:fitbCorrect?"rgba(0,201,167,0.05)":"rgba(255,111,145,0.05)"}}>
-                  <div style={{fontSize:10,letterSpacing:3,color:fitbCorrect?"#00C9A7":"#FF6F91",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>
-                    {fitbCorrect?"✓ Correct!":"✗ Incorrect"}
-                  </div>
-                  <div style={{fontSize:14,marginBottom:6}}>
-                    <span style={{color:"#6a7a9a",fontSize:12}}>Correct answer: </span>
-                    <span style={{color:"#00C9A7",fontWeight:700}}>{q.answerText}</span>
-                  </div>
-                  {fitbAnswer&&!fitbCorrect&&<div style={{fontSize:12,color:"#6a7a9a",marginBottom:8}}>Your answer: <span style={{color:"#FF6F91"}}>{fitbAnswer}</span></div>}
+                <div style={{...S.card,marginBottom:10,borderColor:fitbCorrect?"rgba(0,201,167,0.3)":"rgba(255,111,145,0.3)",background:fitbCorrect?"rgba(0,201,167,0.05)":"rgba(255,111,145,0.05)"}}>
+                  <div style={{fontSize:10,letterSpacing:3,color:fitbCorrect?"#00C9A7":"#FF6F91",textTransform:"uppercase",marginBottom:6,fontFamily:"monospace"}}>{fitbCorrect?"✓ Correct!":"✗ Incorrect"}</div>
+                  <div style={{fontSize:13,marginBottom:4}}><span style={{color:"#6a7a9a",fontSize:11}}>Correct answer: </span><span style={{color:"#00C9A7",fontWeight:700}}>{q.answerText}</span></div>
+                  {fitbAnswer&&!fitbCorrect&&<div style={{fontSize:11,color:"#6a7a9a"}}>Your answer: <span style={{color:"#FF6F91"}}>{fitbAnswer}</span></div>}
                 </div>
               )}
-
-              {/* Model answer / explanation */}
-              <div style={{...S.card,borderColor:"rgba(168,192,255,0.1)",marginBottom:12}}>
-                <div style={{fontSize:10,letterSpacing:3,color:"#a8c0ff",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>
-                  {q.type==="free"?"Model Answer":"Explanation"}
+              {/* AI Grade */}
+              {q.type==="free"&&aiGrade&&(
+                <div style={{...S.card,marginBottom:10,borderColor:aiGrade.correct===true?"rgba(0,201,167,0.3)":aiGrade.correct===false?"rgba(255,111,145,0.3)":"rgba(255,199,95,0.3)",background:aiGrade.correct===true?"rgba(0,201,167,0.05)":aiGrade.correct===false?"rgba(255,111,145,0.05)":"rgba(255,199,95,0.05)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                    <div style={{fontSize:10,letterSpacing:3,color:aiGrade.correct===true?"#00C9A7":"#FF6F91",textTransform:"uppercase",fontFamily:"monospace"}}>AI Grade</div>
+                    {aiGrade.score!==null&&<div style={{fontSize:20,fontWeight:700,color:aiGrade.correct===true?"#00C9A7":"#FF6F91",fontFamily:"monospace"}}>{aiGrade.score}% {aiGrade.grade&&`· ${aiGrade.grade}`}</div>}
+                  </div>
+                  {aiGrade.feedback&&<p style={{fontSize:13,color:"#c0ccee",lineHeight:1.7,margin:"0 0 6px"}}>{aiGrade.feedback}</p>}
+                  {aiGrade.strengths?.length>0&&<div style={{marginBottom:6}}><div style={{fontSize:10,color:"#00C9A7",fontFamily:"monospace",letterSpacing:2,marginBottom:4}}>STRENGTHS</div>{aiGrade.strengths.map((s,i)=><div key={i} style={{fontSize:11,color:"#5a7a5a",marginBottom:2}}>✓ {s}</div>)}</div>}
+                  {aiGrade.missedPoints?.length>0&&<div><div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:4}}>MISSED</div>{aiGrade.missedPoints.map((s,i)=><div key={i} style={{fontSize:11,color:"#7a5a5a",marginBottom:2}}>• {s}</div>)}</div>}
                 </div>
-                <p style={{color:"#c0ccee",fontSize:14,lineHeight:1.8,margin:0}}>{q.explanation}</p>
-                {q.keyPoints&&q.keyPoints.length>0&&(
-                  <div style={{marginTop:12,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:10}}>
-                    <div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",letterSpacing:2,marginBottom:8}}>KEY POINTS</div>
-                    {q.keyPoints.map((kp,i)=>(
-                      <div key={i} style={{display:"flex",gap:8,marginBottom:5}}>
-                        <span style={{color:"#00C9A7",fontSize:12,flexShrink:0}}>•</span>
-                        <span style={{fontSize:12,color:"#6a7a9a",lineHeight:1.6}}>{kp}</span>
-                      </div>
-                    ))}
+              )}
+              {/* Model answer */}
+              <div style={{...S.card,marginBottom:10,borderColor:"rgba(168,192,255,0.1)"}}>
+                <div style={{fontSize:10,letterSpacing:3,color:"#a8c0ff",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>{q.type==="free"?"Model Answer":"Explanation"}</div>
+                <p style={{color:"#c0ccee",fontSize:13,lineHeight:1.8,margin:0}}>{q.explanation}</p>
+                {q.keyPoints?.length>0&&(
+                  <div style={{marginTop:10,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8}}>
+                    <div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",letterSpacing:2,marginBottom:6}}>KEY POINTS</div>
+                    {q.keyPoints.map((kp,i)=><div key={i} style={{display:"flex",gap:7,marginBottom:4}}><span style={{color:"#00C9A7",fontSize:11,flexShrink:0}}>•</span><span style={{fontSize:11,color:"#6a7a9a",lineHeight:1.6}}>{kp}</span></div>)}
                   </div>
                 )}
-                {/* MC wrong explanations */}
-                {(q.type==="mc"||!q.type)&&picked!==q.answer&&q.wrongExplanations&&q.wrongExplanations[picked]&&(
-                  <div style={{marginTop:10,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:10}}>
-                    <div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:6}}>WHY YOUR ANSWER WAS WRONG</div>
-                    <p style={{color:"#7a8db0",fontSize:13,lineHeight:1.7,margin:0}}>{q.wrongExplanations[picked]}</p>
+                {(q.type==="mc"||!q.type)&&picked!==q.answer&&q.wrongExplanations?.[picked]&&(
+                  <div style={{marginTop:8,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8}}>
+                    <div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:5}}>WHY YOUR ANSWER WAS WRONG</div>
+                    <p style={{color:"#7a8db0",fontSize:12,lineHeight:1.7,margin:0}}>{q.wrongExplanations[picked]}</p>
                   </div>
                 )}
               </div>
-
               {studyMode==="strikes"&&strikes>=5
                 ?<button onClick={endSession} style={S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)"})}>Game Over — See Results</button>
                 :<button onClick={nextQ} style={S.primaryBtn({background:"linear-gradient(135deg,#845EC2,#6a44aa)",boxShadow:"0 4px 20px rgba(132,94,194,0.28)"})}>
                   {qIdx+1>=queue.length?"View Results →":"Next Question →"}
                 </button>
               }
-            </div>
-          )}
-
-          {/* Loading indicator for free response grading */}
-          {gradingLoading&&(
-            <div style={{marginTop:16,textAlign:"center"}}>
-              <div style={{width:32,height:32,borderRadius:"50%",border:"3px solid rgba(255,111,145,0.15)",borderTopColor:"#FF6F91",animation:"spin 0.8s linear infinite",margin:"0 auto 8px"}}/>
-              <div style={{fontSize:12,color:"#4a5a7a",fontFamily:"monospace"}}>AI grading your response…</div>
             </div>
           )}
         </div>
@@ -1256,29 +1570,30 @@ function App() {
   if(screen==="results") return (
     <div style={S.page}>
       <div style={S.wrap}>
-        <div style={{textAlign:"center",padding:"40px 0 24px"}}>
-          <div style={{fontSize:48,marginBottom:8}}>{pct>=80?"🏆":pct>=60?"📈":"📚"}</div>
+        <div style={{textAlign:"center",padding:"36px 0 20px"}}>
+          <div style={{fontSize:44,marginBottom:8}}>{pct>=80?"🏆":pct>=60?"📈":"📚"}</div>
           <span style={S.lbl}>Session Complete</span>
           <div style={{fontSize:"clamp(3rem,10vw,5rem)",fontWeight:700,lineHeight:1,
             background:pct>=80?"linear-gradient(135deg,#00C9A7,#00ffd5)":pct>=60?"linear-gradient(135deg,#FFC75F,#ffe0a0)":"linear-gradient(135deg,#FF6F91,#ffb0c0)",
             WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{pct}%</div>
-          <div style={{color:"#4a5a7a",fontSize:14,marginTop:5}}>{score}/{Math.min(queue.length,qIdx+1)} correct</div>
-          {bestStreak>=3&&<div style={{color:"#FFC75F",fontSize:12,marginTop:4,fontFamily:"monospace"}}>🔥 Best streak: {bestStreak}</div>}
-          <div style={{display:"flex",justifyContent:"center",gap:14,marginTop:10}}>
-            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{mastered.length}</div><div style={{fontSize:10,color:"#4a5a7a"}}>Mastered</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:"#FF6F91",fontFamily:"monospace"}}>{learnBank.length}</div><div style={{fontSize:10,color:"#4a5a7a"}}>To Learn</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:"#FFC75F",fontFamily:"monospace"}}>{prog.highScore||pct}%</div><div style={{fontSize:10,color:"#4a5a7a"}}>Best Score</div></div>
+          <div style={{color:"#4a5a7a",fontSize:13,marginTop:4}}>{score}/{Math.min(queue.length,qIdx+1)} correct</div>
+          {deepDiveTopic&&<div style={{fontSize:11,color:"#845EC2",marginTop:3,fontFamily:"monospace"}}>{deepDiveTopic}</div>}
+          {bestStreak>=3&&<div style={{color:"#FFC75F",fontSize:11,marginTop:3,fontFamily:"monospace"}}>🔥 Best streak: {bestStreak}</div>}
+          <div style={{display:"flex",justifyContent:"center",gap:12,marginTop:10}}>
+            {[[mastered.length,"✅","Mastered"],[learnBank.length,"📖","Learn"],[`${prog.highScore||pct}%`,"🏆","Best"]].map(([n,icon,l])=>(
+              <div key={l} style={{textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{icon} {n}</div><div style={{fontSize:10,color:"#4a5a7a"}}>{l}</div></div>
+            ))}
           </div>
         </div>
 
         {Object.keys(sessionStats).length>0&&(
-          <div style={{...S.card,marginBottom:14}}>
+          <div style={{...S.card,marginBottom:12}}>
             <span style={S.lbl}>This Session</span>
             {Object.entries(sessionStats).map(([s,{correct,total}])=>(
-              <div key={s} style={{marginBottom:11}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
-                  <span style={{fontSize:12,color:SC[s]||"#00C9A7",fontFamily:"monospace"}}>{correct}/{total}</span>
+              <div key={s} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontSize:11,color:"#6a7a9a"}}>{s}</span>
+                  <span style={{fontSize:11,color:SC[s]||"#00C9A7",fontFamily:"monospace"}}>{correct}/{total}</span>
                 </div>
                 <PBar value={correct} max={total} color={SC[s]||"#00C9A7"}/>
               </div>
@@ -1287,22 +1602,24 @@ function App() {
         )}
 
         {learnBank.length>0&&(
-          <div style={{...S.card,marginBottom:14,borderColor:"rgba(255,111,145,0.2)"}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#FF6F91",marginBottom:3}}>📖 {learnBank.length} in Learn folder</div>
-            <div style={{fontSize:12,color:"#4a5a7a",marginBottom:10}}>Review these until you master them</div>
-            <button onClick={()=>startStudy("learn")} style={S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)",padding:"12px"})}>Review Missed Questions →</button>
+          <div style={{...S.card,marginBottom:12,borderColor:"rgba(255,111,145,0.2)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#FF6F91",marginBottom:3}}>📖 {learnBank.length} in Learn folder</div>
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <button onClick={()=>startStudy("learnBank")} style={{flex:1,padding:"10px",borderRadius:9,border:"none",cursor:"pointer",background:"rgba(255,111,145,0.15)",color:"#FF6F91",fontSize:12,fontWeight:700}}>Practice Missed →</button>
+              <button onClick={()=>{const topic=deepDiveTopic||subject||"the topics you missed";startLearn(topic,"tutor");}} style={{flex:1,padding:"10px",borderRadius:9,border:"none",cursor:"pointer",background:"rgba(132,94,194,0.15)",color:"#845EC2",fontSize:12,fontWeight:700}}>🤖 Learn with Tutor</button>
+            </div>
           </div>
         )}
 
-        <div style={{display:"flex",gap:10,marginBottom:14}}>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
           <button onClick={()=>startStudy(studyMode,examType,customTopic,deepDiveTopic)} style={S.primaryBtn({flex:1})}>Try Again</button>
           <button onClick={()=>setScreen("dashboard")} style={{...S.ghostBtn,flex:1}}>Dashboard</button>
         </div>
 
         {!isPro&&(
-          <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:18}}>
-            <div style={{fontSize:13,color:"#00C9A7",marginBottom:3,fontWeight:700}}>💡 Unlock everything</div>
-            <div style={{fontSize:12,color:"#4a5a7a",marginBottom:12}}>PA Prep Pro · $14.99/mo or $99/yr</div>
+          <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:16}}>
+            <div style={{fontSize:13,color:"#00C9A7",marginBottom:3,fontWeight:700}}>💡 Unlock everything — including AI Tutor</div>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>PA Prep Pro · $14.99/mo or $99/yr</div>
             <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
           </div>
         )}
