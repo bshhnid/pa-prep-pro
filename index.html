@@ -8,254 +8,610 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#07091a;color:#eef2ff;font-family:'Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif}
-  input{font-family:inherit}
-  button{font-family:inherit}
-  a{font-family:inherit}
-  ::-webkit-scrollbar{width:4px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#07091a;color:#eef2ff;font-family:'Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif}
+input,button,select,textarea{font-family:inherit}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
 
-// ── CONFIG ── swap these with your real Stripe links when ready
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
 const CONFIG = {
-  MONTHLY_LINK: "https://buy.stripe.com/00wfZh67t7sw9I01Ll4ZG00",
+  MONTHLY_LINK: "https://buy.stripe.com/00wfZh67t7sw9I01L14ZG00",
   YEARLY_LINK:  "https://buy.stripe.com/fZubJ1fI39AE6vOcpZ4ZG01",
   FREE_LIMIT: 10,
+  ANTHROPIC_KEY: "YOUR_ANTHROPIC_API_KEY_HERE",
 };
 
+// ─── QUESTION TYPES ───────────────────────────────────────────────────────────
+const Q_TYPES = [
+  { id:"mc",       label:"Multiple Choice", icon:"🔘", desc:"4 options, pick one",              color:"#00C9A7" },
+  { id:"fitb",     label:"Fill in the Blank",icon:"✏️", desc:"Type the missing word or phrase",  color:"#845EC2" },
+  { id:"free",     label:"Free Response",   icon:"📝", desc:"Open-ended clinical explanation",  color:"#FF6F91" },
+  { id:"mixed",    label:"Mixed",           icon:"🎲", desc:"Random mix of all three types",    color:"#FFC75F" },
+];
+
+// ─── DEEP DIVE MODULES ────────────────────────────────────────────────────────
+const DEEP_DIVE_MODULES = [
+  {id:"foundations",label:"Foundations of Medicine",icon:"🔬",color:"#00C9A7",desc:"Anatomy, histology, microbiology, immunology, genetics",subtopics:[
+    {id:"clinical-anatomy",label:"Clinical Anatomy",desc:"Regional anatomy with clinical correlations"},
+    {id:"histology",label:"Histology",desc:"Tissue types, cellular structure, organ histology"},
+    {id:"microbiology",label:"Microbiology",desc:"Bacteria, viruses, fungi, parasites — bugs and drugs"},
+    {id:"immunology",label:"Immunology",desc:"Innate/adaptive immunity, hypersensitivity, immunodeficiency"},
+    {id:"genetics",label:"Genetics",desc:"Inheritance patterns, genetic disorders, chromosomal abnormalities"},
+    {id:"biochemistry",label:"Biochemistry",desc:"Metabolism, enzymes, vitamins, inborn errors"},
+  ]},
+  {id:"clinical-skills",label:"Clinical Skills",icon:"🩺",color:"#4D8AF0",desc:"History taking, physical exam, diagnostics, documentation",subtopics:[
+    {id:"history-taking",label:"History Taking",desc:"HPI, ROS, PMH, family/social history"},
+    {id:"physical-exam",label:"Physical Assessment",desc:"Head-to-toe exam findings, abnormal findings, techniques"},
+    {id:"diagnostics",label:"Diagnostics & Labs",desc:"Lab interpretation, imaging, EKG reading"},
+    {id:"documentation",label:"Clinical Documentation",desc:"SOAP notes, discharge summaries, referrals"},
+    {id:"clinical-reasoning",label:"Clinical Reasoning",desc:"Differential diagnosis, pattern recognition"},
+  ]},
+  {id:"pharmacology",label:"Pharmacology & Therapeutics",icon:"💊",color:"#845EC2",desc:"Drug classes, mechanisms, interactions, prescribing",subtopics:[
+    {id:"pharm-principles",label:"Pharmacokinetics",desc:"ADME, half-life, volume of distribution"},
+    {id:"antibiotics",label:"Antibiotics",desc:"Beta-lactams, fluoroquinolones, macrolides, aminoglycosides"},
+    {id:"cardiovascular-drugs",label:"Cardiovascular Drugs",desc:"Antihypertensives, antiarrhythmics, anticoagulants"},
+    {id:"psych-drugs",label:"Psychiatric Medications",desc:"Antidepressants, antipsychotics, mood stabilizers"},
+    {id:"drug-interactions",label:"Drug Interactions",desc:"CYP450 interactions, high-risk combinations"},
+    {id:"analgesics",label:"Pain Management",desc:"NSAIDs, opioids, adjuvants, pain ladder"},
+    {id:"endocrine-drugs",label:"Endocrine Drugs",desc:"Insulin, oral hypoglycemics, thyroid, steroids"},
+  ]},
+  {id:"systems",label:"Systems-Based Medicine",icon:"🫀",color:"#FF6F91",desc:"Organ system pathophysiology, diagnosis, management",subtopics:[
+    {id:"cardiovascular",label:"Cardiovascular",desc:"CAD, heart failure, arrhythmias, hypertension"},
+    {id:"pulmonary",label:"Pulmonary",desc:"COPD, asthma, pneumonia, PE, lung cancer"},
+    {id:"gastroenterology",label:"Gastroenterology",desc:"GERD, IBD, liver disease, GI bleeding"},
+    {id:"renal",label:"Renal & Urology",desc:"AKI, CKD, glomerulonephritis, acid-base"},
+    {id:"musculoskeletal",label:"Musculoskeletal",desc:"Arthritis, fractures, soft tissue injuries"},
+    {id:"neurology",label:"Neurology",desc:"Stroke, seizures, headache, dementia, MS"},
+    {id:"endocrine",label:"Endocrinology",desc:"Diabetes, thyroid, adrenal, pituitary"},
+    {id:"reproductive",label:"Reproductive",desc:"OB, gynecology, STIs, contraception"},
+    {id:"dermatology",label:"Dermatology",desc:"Common skin conditions, lesion ID, skin cancers"},
+    {id:"hematology",label:"Hematology/Oncology",desc:"Anemias, bleeding disorders, leukemia"},
+    {id:"infectious-disease",label:"Infectious Disease",desc:"HIV, TB, sepsis, infection control"},
+    {id:"rheumatology",label:"Rheumatology",desc:"SLE, RA, vasculitis, crystal arthropathies"},
+  ]},
+  {id:"specialty",label:"Specialty Topics",icon:"⚕️",color:"#FFC75F",desc:"Psychiatry, EM, pediatrics, geriatrics, women's health",subtopics:[
+    {id:"psychiatry",label:"Behavioral Medicine & Psychiatry",desc:"Depression, anxiety, psychosis, substance use"},
+    {id:"emergency-medicine",label:"Emergency Medicine",desc:"Trauma, toxicology, cardiac emergencies"},
+    {id:"pediatrics",label:"Pediatrics",desc:"Development, vaccinations, pediatric illnesses"},
+    {id:"geriatrics",label:"Geriatrics",desc:"Polypharmacy, falls, dementia, end-of-life"},
+    {id:"womens-health",label:"Women's Health",desc:"Prenatal care, labor/delivery, menopause"},
+    {id:"ENT",label:"ENT",desc:"Otitis, sinusitis, vertigo, hearing loss"},
+    {id:"orthopedics",label:"Orthopedic Surgery",desc:"Fracture management, sports medicine"},
+  ]},
+  {id:"professionalism",label:"Professionalism & EBM",icon:"⚖️",color:"#4D8AF0",desc:"Ethics, evidence-based medicine, population health",subtopics:[
+    {id:"medical-ethics",label:"Medical Ethics",desc:"Autonomy, beneficence, informed consent"},
+    {id:"ebm",label:"Evidence-Based Medicine",desc:"Study design, statistics, NNT, p-values"},
+    {id:"population-health",label:"Population Health",desc:"Epidemiology, screening, prevention"},
+    {id:"healthcare-systems",label:"Healthcare Systems",desc:"Insurance, billing, malpractice, PA scope"},
+  ]},
+  {id:"rotations",label:"Clinical Rotations Prep",icon:"🏥",color:"#FF9F43",desc:"Prepare for each clinical rotation",subtopics:[
+    {id:"rotation-internal",label:"Internal Medicine",desc:"Common inpatient presentations, rounds"},
+    {id:"rotation-surgery",label:"General Surgery",desc:"Pre/post-op care, surgical emergencies"},
+    {id:"rotation-ob",label:"OB/GYN",desc:"Labor management, prenatal care"},
+    {id:"rotation-peds",label:"Pediatrics",desc:"Well-child visits, acute pediatric illness"},
+    {id:"rotation-psych",label:"Psychiatry",desc:"Mental status exam, inpatient psychiatry"},
+    {id:"rotation-em",label:"Emergency Medicine",desc:"Triage, acute management, procedures"},
+    {id:"rotation-family",label:"Family Medicine",desc:"Preventive care, chronic disease management"},
+  ]},
+];
+
 const SUBJECTS = ["All","Anatomy & Physiology","Pharmacology","Clinical Medicine","Pathophysiology","Medical Ethics & Law"];
-const DIFFS    = ["Easy","Medium","Hard"];
+const DIFFS = ["Easy","Medium","Hard"];
 const SC = {"Anatomy & Physiology":"#00C9A7","Pharmacology":"#845EC2","Clinical Medicine":"#FF6F91","Pathophysiology":"#FFC75F","Medical Ethics & Law":"#4D8AF0"};
 const DC = {Easy:"#00C9A7",Medium:"#FFC75F",Hard:"#FF6F91"};
 
-const store = {
-  get:(k,fb=null)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}},
-  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
-};
-
-const QUESTIONS = [
-  {id:1,subject:"Anatomy & Physiology",difficulty:"Medium",question:"Which heart valve separates the left atrium from the left ventricle?",options:["Tricuspid valve","Pulmonary valve","Mitral valve","Aortic valve"],answer:2,explanation:"The mitral (bicuspid) valve separates the left atrium from the left ventricle. It has two leaflets and prevents backflow during ventricular contraction."},
-  {id:2,subject:"Anatomy & Physiology",difficulty:"Hard",question:"Which best describes the role of the juxtaglomerular apparatus?",options:["Filters glucose from filtrate","Regulates GFR via renin secretion","Reabsorbs sodium in collecting duct","Produces erythropoietin"],answer:1,explanation:"The JGA monitors blood pressure and secretes renin when it drops, activating the RAAS cascade to restore perfusion."},
-  {id:3,subject:"Anatomy & Physiology",difficulty:"Easy",question:"Primary function of the sinoatrial (SA) node?",options:["Delay conduction between atria and ventricles","Generate the primary pacemaker impulse","Distribute impulses through ventricular myocardium","Regulate stroke volume"],answer:1,explanation:"The SA node is the heart's natural pacemaker, depolarizing at 60–100 bpm to initiate each cardiac cycle."},
-  {id:4,subject:"Anatomy & Physiology",difficulty:"Medium",question:"The brachial plexus is formed by which spinal nerve roots?",options:["C1–C5","C5–T1","T1–T5","C3–C8"],answer:1,explanation:"The brachial plexus arises from C5–T1, providing motor and sensory innervation to the entire upper extremity."},
-  {id:5,subject:"Anatomy & Physiology",difficulty:"Hard",question:"Which correctly describes the Frank-Starling mechanism?",options:["Increased afterload increases stroke volume","Increased preload stretches myocardial fibers increasing force","Sympathetic stimulation decreases heart rate","Decreased filling time increases cardiac output"],answer:1,explanation:"Increased end-diastolic volume stretches sarcomeres toward optimal length, increasing cross-bridge formation and stroke volume."},
-  {id:6,subject:"Anatomy & Physiology",difficulty:"Easy",question:"Primary muscle driving inspiration at rest?",options:["External intercostals","Scalenes","Diaphragm","Sternocleidomastoid"],answer:2,explanation:"The diaphragm contracts and flattens during inspiration, increasing thoracic volume and driving ~75% of tidal volume."},
-  {id:7,subject:"Anatomy & Physiology",difficulty:"Medium",question:"Primary site of sodium reabsorption in the nephron?",options:["Collecting duct","Thick ascending limb","Proximal convoluted tubule","Distal convoluted tubule"],answer:2,explanation:"The PCT reabsorbs ~67% of filtered sodium via Na/K-ATPase on the basolateral membrane."},
-  {id:8,subject:"Anatomy & Physiology",difficulty:"Hard",question:"Cardiac cycle phase with lowest ventricular volume?",options:["End-diastole","Isovolumetric contraction","End-systole","Rapid ventricular filling"],answer:2,explanation:"End-systole marks the point after ejection when ventricular volume is at its minimum (~50–60 mL at rest)."},
-  {id:9,subject:"Anatomy & Physiology",difficulty:"Easy",question:"Cartilage covering articular surfaces of synovial joints?",options:["Fibrocartilage","Elastic cartilage","Hyaline cartilage","Fibrous cartilage"],answer:2,explanation:"Hyaline cartilage forms articular surfaces, providing a low-friction, shock-absorbing surface for joint movement."},
-  {id:10,subject:"Anatomy & Physiology",difficulty:"Medium",question:"Femoral nerve arises from which lumbar roots?",options:["L1–L3","L2–L4","L3–L5","L4–S1"],answer:1,explanation:"The femoral nerve (L2–L4) innervates the quadriceps and provides sensation to the anterior thigh and medial leg."},
-  {id:11,subject:"Pharmacology",difficulty:"Medium",question:"How do beta-blockers primarily reduce blood pressure?",options:["Block alpha-1 receptors","Decrease HR and CO via beta-1 blockade","Inhibit ACE","Block calcium channels"],answer:1,explanation:"Beta-blockers antagonize catecholamines at beta-1 receptors, reducing chronotropy and inotropy to lower cardiac output."},
-  {id:12,subject:"Pharmacology",difficulty:"Hard",question:"Patient on warfarin starts fluconazole. Expected interaction?",options:["Decreased warfarin via CYP2C9 induction","Increased warfarin via CYP2C9 inhibition","No significant interaction","Decreased absorption via chelation"],answer:1,explanation:"Fluconazole inhibits CYP2C9, raising warfarin levels and increasing bleeding risk. Monitor INR closely."},
-  {id:13,subject:"Pharmacology",difficulty:"Easy",question:"Antidote for acetaminophen overdose?",options:["Flumazenil","Naloxone","N-acetylcysteine","Physostigmine"],answer:2,explanation:"NAC replenishes glutathione, neutralizing the toxic NAPQI metabolite responsible for hepatotoxicity."},
-  {id:14,subject:"Pharmacology",difficulty:"Medium",question:"First-line drug class for type 2 diabetes without contraindications?",options:["Sulfonylureas","SGLT-2 inhibitors","Metformin","GLP-1 agonists"],answer:2,explanation:"Metformin is first-line due to efficacy, safety, low cost, weight neutrality, and cardiovascular benefits."},
-  {id:15,subject:"Pharmacology",difficulty:"Hard",question:"Statins inhibit which enzyme in cholesterol biosynthesis?",options:["Squalene synthase","HMG-CoA reductase","Cholesterol 7α-hydroxylase","PCSK9"],answer:1,explanation:"Statins competitively inhibit HMG-CoA reductase, the rate-limiting step in hepatic cholesterol synthesis."},
-  {id:16,subject:"Pharmacology",difficulty:"Easy",question:"Which agent reverses opioid overdose?",options:["Flumazenil","Naloxone","Atropine","Physostigmine"],answer:1,explanation:"Naloxone (Narcan) is a competitive opioid receptor antagonist reversing respiratory depression and sedation."},
-  {id:17,subject:"Pharmacology",difficulty:"Medium",question:"Mechanism of ACE inhibitors?",options:["Block AT2 receptors","Inhibit conversion of Ang I to Ang II","Stimulate aldosterone","Block beta-1 receptors"],answer:1,explanation:"ACE inhibitors block angiotensin-converting enzyme, preventing Ang II formation, causing vasodilation and lowering BP."},
-  {id:18,subject:"Pharmacology",difficulty:"Hard",question:"Agranulocytosis after starting hyperthyroidism treatment. Most likely drug?",options:["Levothyroxine","Propranolol","Methimazole","Radioactive iodine"],answer:2,explanation:"Methimazole can cause agranulocytosis — a rare but life-threatening side effect. Report fever or sore throat immediately."},
-  {id:19,subject:"Pharmacology",difficulty:"Medium",question:"Antibiotic class inhibiting cell wall synthesis via PBP binding?",options:["Fluoroquinolones","Beta-lactams","Macrolides","Aminoglycosides"],answer:1,explanation:"Beta-lactams covalently bind penicillin-binding proteins, preventing peptidoglycan cross-linking."},
-  {id:20,subject:"Pharmacology",difficulty:"Easy",question:"First-line treatment for anaphylaxis?",options:["Diphenhydramine","Methylprednisolone","Epinephrine 1:1000 IM","Albuterol"],answer:2,explanation:"Epinephrine IM into the anterolateral thigh is first-line, reversing bronchospasm, hypotension, and urticaria."},
-  {id:21,subject:"Clinical Medicine",difficulty:"Medium",question:"ST elevation in II, III, aVF. Which artery is occluded?",options:["LAD","Left circumflex","Right coronary artery","Left main"],answer:2,explanation:"Inferior MI (ST elevation II, III, aVF) is most commonly RCA occlusion, supplying the inferior wall."},
-  {id:22,subject:"Clinical Medicine",difficulty:"Easy",question:"Most common cause of CAP in healthy adults?",options:["H. influenzae","S. pneumoniae","Mycoplasma pneumoniae","Legionella"],answer:1,explanation:"Streptococcus pneumoniae accounts for the majority of typical CAP cases across all age groups."},
-  {id:23,subject:"Clinical Medicine",difficulty:"Hard",question:"Most classic physical exam finding for appendicitis?",options:["Rovsing's sign","McBurney's point tenderness","Psoas sign","Obturator sign"],answer:1,explanation:"McBurney's point (1/3 from ASIS to umbilicus) tenderness is the most classic finding for appendicitis."},
-  {id:24,subject:"Clinical Medicine",difficulty:"Medium",question:"COPD exacerbation: PaCO2 65, pH 7.28. Primary disturbance?",options:["Metabolic acidosis","Respiratory alkalosis","Respiratory acidosis","Mixed acidosis"],answer:2,explanation:"Elevated PaCO2 with low pH = respiratory acidosis from hypoventilation and CO2 retention."},
-  {id:25,subject:"Clinical Medicine",difficulty:"Easy",question:"First-line treatment for uncomplicated UTI in women?",options:["Amoxicillin","Ciprofloxacin","Nitrofurantoin or TMP-SMX","Cephalexin"],answer:2,explanation:"Nitrofurantoin and TMP-SMX are first-line per IDSA guidelines. Fluoroquinolones reserved for complicated infections."},
-  {id:26,subject:"Clinical Medicine",difficulty:"Medium",question:"Butterfly rash + joint pain + photosensitivity + positive ANA. Diagnosis?",options:["Rheumatoid arthritis","SLE","Sjogren syndrome","Dermatomyositis"],answer:1,explanation:"SLE: malar rash, photosensitivity, arthritis, positive ANA. ≥4 ACR criteria confirm diagnosis."},
-  {id:27,subject:"Clinical Medicine",difficulty:"Easy",question:"Electrolyte abnormality causing peaked T waves on ECG?",options:["Hyponatremia","Hypercalcemia","Hyperkalemia","Hypomagnesemia"],answer:2,explanation:"Hyperkalemia causes peaked T waves — earliest ECG change. Rising K+ → PR prolongation → wide QRS → sine wave."},
-  {id:28,subject:"Clinical Medicine",difficulty:"Hard",question:"Sepsis-3 defines sepsis as?",options:["SIRS + infection","Life-threatening organ dysfunction from dysregulated host response (SOFA ≥2)","Fever + leukocytosis + positive cultures","Hypotension + elevated lactate"],answer:1,explanation:"Sepsis-3 (2016): life-threatening organ dysfunction from dysregulated host response, SOFA score increase ≥2."},
-  {id:29,subject:"Clinical Medicine",difficulty:"Medium",question:"Wells score assesses pre-test probability of?",options:["CAP severity","DVT","ACS","Pulmonary hypertension"],answer:1,explanation:"Wells DVT score uses clinical variables (cancer, immobilization, calf tenderness) to guide D-dimer vs imaging workup."},
-  {id:30,subject:"Clinical Medicine",difficulty:"Hard",question:"Gold standard for diagnosing pulmonary embolism?",options:["V/Q scan","CTPA","D-dimer","Pulmonary angiography"],answer:3,explanation:"Pulmonary angiography is the historical gold standard, though CTPA (~95% sensitivity, ~98% specificity) has replaced it."},
-  {id:31,subject:"Pathophysiology",difficulty:"Medium",question:"Mechanism of hyperglycemia in Type 1 diabetes?",options:["Peripheral insulin resistance","Autoimmune destruction of beta cells","Excess glucagon","Decreased renal threshold"],answer:1,explanation:"Type 1 DM: autoimmune T-cell destruction of pancreatic beta cells → absolute insulin deficiency."},
-  {id:32,subject:"Pathophysiology",difficulty:"Hard",question:"Earliest compensatory mechanism in hemorrhagic shock?",options:["Renal renin release","Increased ADH","Baroreceptor-mediated sympathetic activation","Erythropoietin release"],answer:2,explanation:"Baroreceptors immediately trigger sympathetic discharge — the fastest compensatory response to hemorrhage."},
-  {id:33,subject:"Pathophysiology",difficulty:"Easy",question:"Left heart failure most commonly leads to?",options:["Pulmonary embolism","Pulmonary edema","Pneumothorax","Pleural empyema"],answer:1,explanation:"Left heart failure increases pulmonary venous pressure → fluid leaks into alveoli and interstitium."},
-  {id:34,subject:"Pathophysiology",difficulty:"Medium",question:"Primary cytokines mediating fever?",options:["TNF-alpha only","IL-4 and IL-10","IL-1β and IL-6","IFN-gamma"],answer:2,explanation:"IL-1β and IL-6 stimulate the hypothalamus to produce PGE2 via COX-2, raising the thermoregulatory set point."},
-  {id:35,subject:"Pathophysiology",difficulty:"Hard",question:"Thrombocytopenia + MAHA + fever + renal failure + neuro symptoms. Diagnosis?",options:["DIC","ITP","TTP","HUS"],answer:2,explanation:"Classic pentad of TTP: caused by ADAMTS13 deficiency → ultra-large vWF → platelet microthrombi → multi-organ injury."},
-  {id:36,subject:"Pathophysiology",difficulty:"Medium",question:"Mechanism of Cushing syndrome?",options:["Primary adrenal insufficiency","Excess cortisol from any cause","Excess aldosterone","21-hydroxylase deficiency"],answer:1,explanation:"Cushing = chronic excess cortisol from exogenous steroids, pituitary adenoma, adrenal tumor, or ectopic ACTH."},
-  {id:37,subject:"Pathophysiology",difficulty:"Easy",question:"Irreversible cell death with swelling and membrane rupture?",options:["Apoptosis","Necrosis","Autophagy","Anoikis"],answer:1,explanation:"Necrosis: uncontrolled death with membrane disruption, releasing intracellular contents and triggering inflammation."},
-  {id:38,subject:"Pathophysiology",difficulty:"Hard",question:"Mechanism of secondary hyperparathyroidism in CKD?",options:["Decreased PTH degradation","Phosphate retention → hypocalcemia + decreased calcitriol","Increased gut Ca absorption","Primary parathyroid hyperplasia"],answer:1,explanation:"CKD → phosphate retention + decreased calcitriol → hypocalcemia + loss of negative feedback → elevated PTH."},
-  {id:39,subject:"Pathophysiology",difficulty:"Medium",question:"Pathogenesis of atherosclerosis?",options:["Smooth muscle hypertrophy","Endothelial injury → LDL oxidation → foam cells → fibrous plaque","Primary clot on intact endothelium","Elastic artery calcification"],answer:1,explanation:"Atherosclerosis: endothelial injury → LDL oxidation → macrophage foam cells → fibrous plaque → CAD/stroke/PVD."},
-  {id:40,subject:"Pathophysiology",difficulty:"Easy",question:"Type of hypersensitivity causing anaphylaxis?",options:["Type II","Type III","Type I (IgE-mediated)","Type IV"],answer:2,explanation:"Anaphylaxis = Type I. IgE on mast cells binds antigen → degranulation → histamine/leukotriene release → systemic vasodilation."},
-  {id:41,subject:"Medical Ethics & Law",difficulty:"Easy",question:"Ethical principle requiring action in the patient's best interest?",options:["Autonomy","Beneficence","Non-maleficence","Justice"],answer:1,explanation:"Beneficence obligates clinicians to act for the patient's benefit, balanced with autonomy when patients make suboptimal decisions."},
-  {id:42,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Competent adult refuses life-saving transfusion for religious reasons. Action?",options:["Override and transfuse","Respect refusal and document","Obtain court order","Consult psychiatry"],answer:1,explanation:"Competent adults may refuse any treatment under autonomy. Document thoroughly. Overriding constitutes battery."},
-  {id:43,subject:"Medical Ethics & Law",difficulty:"Hard",question:"HIPAA-permitted disclosure without authorization?",options:["Records to employer","Reporting gunshot wound to law enforcement per state law","HIV status to spouse","Records to pharma for marketing"],answer:1,explanation:"HIPAA permits law enforcement disclosure for certain injuries (e.g. gunshot wounds) as required by state law."},
-  {id:44,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Patient lacks capacity, no advance directive. Who is surrogate?",options:["Treating physician","Ethics committee","Next of kin per state law hierarchy","Any family member"],answer:2,explanation:"Most states have legal hierarchy (spouse → adult children → parents → siblings). Surrogate applies substituted judgment."},
-  {id:45,subject:"Medical Ethics & Law",difficulty:"Easy",question:"Four elements of medical malpractice?",options:["Intent, harm, causation, damages","Duty, breach, causation, damages","Negligence, intent, foreseeability, injury","Standard of care, error, harm, reporting"],answer:1,explanation:"The 4 Ds: Duty (provider-patient relationship), Dereliction (breach of standard of care), Direct causation, Damages."},
-  {id:46,subject:"Medical Ethics & Law",difficulty:"Hard",question:"16-year-old requests contraception without parental consent. Approach?",options:["Refuse until parent present","Refer to gynecologist","Provide care — minors can consent to reproductive health in most states","Notify parents"],answer:2,explanation:"Most states allow minors to consent to reproductive health, STI testing, and contraception under mature minor doctrine."},
-  {id:47,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Valid informed consent requires?",options:["Patient signature","Disclosure of diagnosis, treatment, risks, benefits, alternatives in understandable language","Verbal agreement","Next-of-kin consent"],answer:1,explanation:"Valid informed consent: disclosure, comprehension, voluntariness (no coercion), and decision-making capacity."},
-  {id:48,subject:"Medical Ethics & Law",difficulty:"Hard",question:"Doctrine allowing emergency treatment of unconscious patient when no surrogate available?",options:["Therapeutic privilege","Implied consent","Substituted judgment","Advance directive"],answer:1,explanation:"Implied consent assumes a reasonable person would consent to emergency treatment, permitting action when delay causes harm."},
-  {id:49,subject:"Medical Ethics & Law",difficulty:"Easy",question:"Justice in medical ethics refers to?",options:["Acting in patient's best interest","Do no harm","Fair distribution of resources and equitable treatment","Respecting autonomy"],answer:2,explanation:"Justice: fair, equitable patient treatment and appropriate allocation of healthcare resources without discrimination."},
-  {id:50,subject:"Medical Ethics & Law",difficulty:"Medium",question:"Terminal patient requests lethal medication in state with legal PAS. First step?",options:["No living family","Capacity + terminal diagnosis + repeated voluntary requests","Ethics board approval","All curative options attempted"],answer:1,explanation:"Legal PAS requires: terminal diagnosis (≤6 months), decision-making capacity, repeated voluntary requests, second-provider evaluation."},
+const STUDY_MODES = [
+  {id:"infinite",  icon:"∞",  label:"Infinite Mode",    desc:"Endless questions, no pressure",         color:"#00C9A7"},
+  {id:"strikes",   icon:"⚡", label:"5 Strikes",         desc:"Miss 5 and it's game over",              color:"#FF6F91"},
+  {id:"flashcard", icon:"🃏", label:"Flashcards",        desc:"Term on front, answer on back",          color:"#845EC2"},
+  {id:"exam",      icon:"📋", label:"Practice Exam",     desc:"Timed, board-style full exams",          color:"#FFC75F"},
+  {id:"custom",    icon:"🎯", label:"Custom AI Topic",   desc:"Type any topic, AI generates questions", color:"#4D8AF0"},
+  {id:"lab",       icon:"🔬", label:"Lab & Anatomy",     desc:"Structures, functions, diagrams",        color:"#FF9F43"},
 ];
 
-async function generateAIQuestions(subject, difficulty, count, used=[]) {
-  const subjectCtx = subject==="All"
-    ? "any PA school subject (Anatomy & Physiology, Pharmacology, Clinical Medicine, Pathophysiology, or Medical Ethics & Law)"
-    : subject;
-  const recent = used.slice(-6).map(q=>q.question).join("; ");
-  const prompt = `You are an expert PA school educator. Generate ${count} unique multiple-choice questions for PA board exam prep.
+const EXAM_TYPES = [
+  {id:"pance",    label:"PANCE Practice",    questions:60,  time:60,  desc:"60 questions · 60 min · NCCPA style"},
+  {id:"boards",   label:"Board Simulation",  questions:120, time:120, desc:"120 questions · 2 hours · Full boards"},
+  {id:"paschool", label:"PA School Midterm", questions:50,  time:75,  desc:"50 questions · 75 min · Didactic year"},
+  {id:"custom",   label:"Custom Exam",       questions:0,   time:0,   desc:"You choose length and subject"},
+];
+
+const ANATOMY_ITEMS = [
+  {id:1,level:"undergrad",category:"Anatomy & Physiology",label:"Heart Valves",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Diagram_of_the_human_heart_%28cropped%29.svg/400px-Diagram_of_the_human_heart_%28cropped%29.svg.png",question:"Identify the valve between the left atrium and left ventricle",answer:"Mitral (Bicuspid) Valve",explanation:"The mitral valve has two leaflets and prevents backflow from LV to LA during systole."},
+  {id:2,level:"undergrad",category:"Anatomy & Physiology",label:"Brachial Plexus",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brachial_plexus_color.svg/400px-Brachial_plexus_color.svg.png",question:"Which nerve roots form the brachial plexus?",answer:"C5–T1",explanation:"The brachial plexus (C5–T1) gives rise to the musculocutaneous, median, ulnar, radial, and axillary nerves."},
+  {id:3,level:"paschool",category:"Anatomy & Physiology",label:"Nephron",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Kidney_nephron_molar_transport_diagram.svg/400px-Kidney_nephron_molar_transport_diagram.svg.png",question:"Which segment of the nephron is primarily responsible for sodium reabsorption?",answer:"Proximal Convoluted Tubule (PCT)",explanation:"The PCT reabsorbs ~67% of filtered sodium via Na/K-ATPase on the basolateral membrane."},
+  {id:4,level:"boards",category:"Anatomy & Physiology",label:"ECG Waves",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/SinusRhythmLabels.svg/400px-SinusRhythmLabels.svg.png",question:"What cardiac event does the QRS complex represent?",answer:"Ventricular depolarization",explanation:"The QRS complex represents ventricular depolarization. Width reflects conduction time (normal <120ms)."},
+];
+
+const store = {
+  get:(k,fb=null)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}},
+};
+
+// ─── SEED QUESTIONS ───────────────────────────────────────────────────────────
+const SEED_QUESTIONS = [
+  {id:1,subject:"Anatomy & Physiology",difficulty:"Medium",type:"mc",question:"Which heart valve separates the left atrium from the left ventricle?",options:["Tricuspid valve","Pulmonary valve","Mitral valve","Aortic valve"],answer:2,answerText:"Mitral valve",explanation:"The mitral (bicuspid) valve separates the left atrium from left ventricle. It has two leaflets and prevents backflow during ventricular contraction.",wrongExplanations:["The tricuspid valve is on the RIGHT side between right atrium and right ventricle.","The pulmonary valve is between right ventricle and pulmonary artery.","","The aortic valve is between left ventricle and aorta — not atrium-to-ventricle."]},
+  {id:2,subject:"Anatomy & Physiology",difficulty:"Hard",type:"fitb",question:"The ___ apparatus monitors blood pressure and secretes renin when it drops, activating the RAAS cascade.",answer:null,answerText:"juxtaglomerular",blankedWord:"juxtaglomerular",explanation:"The juxtaglomerular (JG) apparatus consists of macula densa cells and JG cells. It senses low renal perfusion and secretes renin to activate angiotensin II."},
+  {id:3,subject:"Anatomy & Physiology",difficulty:"Easy",type:"mc",question:"Primary function of the sinoatrial (SA) node?",options:["Delay conduction between atria and ventricles","Generate the primary pacemaker impulse","Distribute impulses through ventricular myocardium","Regulate stroke volume"],answer:1,answerText:"Generate the primary pacemaker impulse",explanation:"The SA node is the heart's natural pacemaker, depolarizing at 60–100 bpm to initiate each cardiac cycle.",wrongExplanations:["Delaying conduction is the AV node's function.","","Distributing impulses through the ventricles is the His-Purkinje system.","Stroke volume is regulated by preload, afterload, and contractility."]},
+  {id:4,subject:"Anatomy & Physiology",difficulty:"Medium",type:"free",question:"Explain the Frank-Starling mechanism and its clinical significance in heart failure.",answer:null,answerText:"",explanation:"The Frank-Starling law states that increased end-diastolic volume (preload) stretches sarcomeres toward optimal length, increasing cross-bridge formation and stroke volume. In heart failure, this mechanism is initially compensatory but eventually fails as the ventricle dilates beyond optimal sarcomere length, reducing contractility. This is why ACE inhibitors and diuretics (which reduce preload) improve outcomes — they bring the ventricle back to a more optimal operating point.",keyPoints:["Increased preload → increased stretch → increased stroke volume","Sarcomere optimal length ~2.2 μm","In HF: over-stretched sarcomeres → decreased contractility","Clinical: basis for using diuretics and ACE inhibitors in HF"]},
+  {id:5,subject:"Pharmacology",difficulty:"Medium",type:"mc",question:"How do beta-blockers primarily reduce blood pressure?",options:["Block alpha-1 receptors causing vasodilation","Decrease HR and CO via beta-1 blockade","Inhibit ACE preventing angiotensin II","Block calcium channels in vascular smooth muscle"],answer:1,answerText:"Decrease HR and CO via beta-1 blockade",explanation:"Beta-blockers antagonize catecholamines at beta-1 receptors, reducing chronotropy and inotropy to lower cardiac output and blood pressure.",wrongExplanations:["Alpha-1 blockade is prazosin's mechanism, not beta-blockers.","","ACE inhibition is lisinopril's mechanism.","Calcium channel blockade is amlodipine's mechanism."]},
+  {id:6,subject:"Pharmacology",difficulty:"Hard",type:"fitb",question:"Fluconazole inhibits ___, the primary enzyme metabolizing warfarin, raising warfarin levels and increasing bleeding risk.",answer:null,answerText:"CYP2C9",blankedWord:"CYP2C9",explanation:"CYP2C9 metabolizes the more potent S-enantiomer of warfarin. Fluconazole is a potent CYP2C9 inhibitor, causing dramatically increased warfarin exposure. INR must be monitored closely and warfarin dose reduced."},
+  {id:7,subject:"Pharmacology",difficulty:"Easy",type:"mc",question:"Antidote for acetaminophen overdose?",options:["Flumazenil","Naloxone","N-acetylcysteine","Physostigmine"],answer:2,answerText:"N-acetylcysteine",explanation:"NAC replenishes glutathione stores, neutralizing the toxic NAPQI metabolite responsible for hepatotoxicity.",wrongExplanations:["Flumazenil reverses benzodiazepine overdose.","Naloxone reverses opioid overdose.","","Physostigmine reverses anticholinergic toxicity."]},
+  {id:8,subject:"Pharmacology",difficulty:"Medium",type:"free",question:"A patient with type 2 diabetes has an eGFR of 35 mL/min and is currently on metformin. What is your management and why?",answer:null,answerText:"",explanation:"Metformin is contraindicated when eGFR <30 mL/min/1.73m² due to risk of lactic acidosis from drug accumulation. At eGFR 30-45, metformin should be used with caution and dose reduced. At eGFR 35, most guidelines recommend stopping metformin or reducing to 50% dose with close monitoring. Alternative agents should be considered — SGLT-2 inhibitors have reduced efficacy at this eGFR, GLP-1 agonists or DPP-4 inhibitors (dose-adjusted) are preferred.",keyPoints:["Metformin contraindicated if eGFR <30","Use with caution eGFR 30-45","Risk: lactic acidosis from accumulation","Alternatives: GLP-1 agonists, DPP-4 inhibitors (dose-adjusted)"]},
+  {id:9,subject:"Clinical Medicine",difficulty:"Medium",type:"mc",question:"ST elevation in II, III, aVF. Which artery is most likely occluded?",options:["Left anterior descending","Left circumflex","Right coronary artery","Left main"],answer:2,answerText:"Right coronary artery",explanation:"Inferior MI (ST elevation II, III, aVF) is most commonly RCA occlusion, supplying the inferior wall and posterior descending artery.",wrongExplanations:["LAD causes anterior MI — ST elevation in V1–V4.","LCx causes lateral MI — ST elevation in I, aVL, V5–V6.","","Left main causes massive anterior-lateral MI with hemodynamic collapse."]},
+  {id:10,subject:"Clinical Medicine",difficulty:"Easy",type:"fitb",question:"The most common cause of community-acquired pneumonia in healthy adults is ___, which is treated empirically with beta-lactams or respiratory fluoroquinolones.",answer:null,answerText:"Streptococcus pneumoniae",blankedWord:"Streptococcus pneumoniae",explanation:"S. pneumoniae (pneumococcus) is responsible for ~35–40% of CAP cases. It presents as typical pneumonia with acute onset, productive cough, lobar consolidation, and elevated WBC."},
+  {id:11,subject:"Clinical Medicine",difficulty:"Hard",type:"free",question:"A 68-year-old male presents with 3 days of progressive dyspnea, orthopnea, and lower extremity edema. Exam shows JVD, S3 gallop, bibasilar crackles, and pitting edema to the knees. BNP is 1,200. What is your diagnosis, pathophysiology, and initial management?",answer:null,answerText:"",explanation:"This is acute decompensated heart failure (ADHF). The S3 gallop, JVD, bibasilar crackles, pitting edema, and elevated BNP confirm the diagnosis. Pathophysiology: reduced cardiac output → neurohormonal activation (RAAS, SNS) → sodium/water retention → increased preload → pulmonary congestion. Management: IV furosemide (diuresis), oxygen, position upright, monitor ins/outs, daily weights, echocardiography to assess EF, BMP for electrolytes/renal function. If HFrEF confirmed, initiate/optimize GDMT (ACEi/ARB, beta-blocker, spironolactone, SGLT-2i).",keyPoints:["Diagnosis: ADHF with likely HFrEF","BNP >500 highly specific for HF","First-line: IV furosemide + oxygen","Echo to assess EF","GDMT optimization once stabilized"]},
+  {id:12,subject:"Pathophysiology",difficulty:"Medium",type:"mc",question:"Mechanism of hyperglycemia in Type 1 diabetes?",options:["Peripheral insulin resistance","Autoimmune destruction of beta cells","Excess glucagon secretion","Decreased renal glucose threshold"],answer:1,answerText:"Autoimmune destruction of beta cells",explanation:"Type 1 DM: autoimmune T-cell mediated destruction of pancreatic beta cells → absolute insulin deficiency → unregulated hepatic glucose production.",wrongExplanations:["Peripheral insulin resistance is Type 2 DM.","","Excess glucagon is a consequence, not the primary mechanism.","Decreased renal threshold causes glucosuria — not the cause of hyperglycemia."]},
+  {id:13,subject:"Pathophysiology",difficulty:"Hard",type:"fitb",question:"In hemorrhagic shock, the earliest compensatory mechanism is ___ activation, which triggers tachycardia and vasoconstriction within seconds.",answer:null,answerText:"baroreceptor/sympathetic",blankedWord:"baroreceptor/sympathetic",explanation:"Baroreceptors in the carotid sinus and aortic arch detect falling arterial pressure and immediately trigger sympathetic discharge. This is the fastest compensatory response — RAAS and ADH activation follow minutes later."},
+  {id:14,subject:"Pathophysiology",difficulty:"Easy",type:"mc",question:"Left heart failure most commonly leads to?",options:["Pulmonary embolism","Pulmonary edema","Pneumothorax","Pleural empyema"],answer:1,answerText:"Pulmonary edema",explanation:"Left heart failure increases pulmonary venous pressure → fluid leaks into alveoli and interstitium → pulmonary edema.",wrongExplanations:["PE is from venous thromboembolism — not directly related to LHF.","","Pneumothorax is air in the pleural space — trauma or spontaneous rupture.","Pleural empyema is infected pleural fluid — complication of pneumonia."]},
+  {id:15,subject:"Medical Ethics & Law",difficulty:"Easy",type:"mc",question:"Ethical principle requiring action in the patient's best interest?",options:["Autonomy","Beneficence","Non-maleficence","Justice"],answer:1,answerText:"Beneficence",explanation:"Beneficence obligates clinicians to act for the patient's benefit. Must be balanced with autonomy when patients make decisions that may not optimize health.",wrongExplanations:["Autonomy is the patient's right to make their own decisions.","","Non-maleficence is 'do no harm' — avoiding harm, not actively promoting benefit.","Justice is about fair distribution of healthcare resources."]},
+  {id:16,subject:"Medical Ethics & Law",difficulty:"Medium",type:"fitb",question:"A competent adult who refuses life-saving treatment is exercising their right to ___, which providers must legally and ethically respect.",answer:null,answerText:"autonomy",blankedWord:"autonomy",explanation:"Patient autonomy is a foundational bioethical principle. Competent adults have the legal right to refuse any treatment, even life-saving interventions. Overriding this constitutes battery. The provider's role is to ensure the patient has decision-making capacity and is making an informed, voluntary decision."},
+  {id:17,subject:"Medical Ethics & Law",difficulty:"Hard",type:"free",question:"Explain the four elements required to establish medical malpractice and give a clinical example of each.",answer:null,answerText:"",explanation:"The 4 Ds of medical malpractice: (1) Duty — a provider-patient relationship existed (e.g., a PA evaluated and treated the patient). (2) Dereliction — a breach of the standard of care (e.g., failing to order troponin in a patient with chest pain). (3) Direct causation — the breach directly caused harm (e.g., the missed MI led to cardiac arrest). (4) Damages — quantifiable harm resulted (e.g., permanent cardiac damage, lost wages). All four must be proven for a successful malpractice claim.",keyPoints:["Duty: provider-patient relationship","Dereliction: breach of standard of care","Direct causation: breach caused harm","Damages: quantifiable harm","All 4 elements must be proven"]},
+  {id:18,subject:"Anatomy & Physiology",difficulty:"Easy",type:"fitb",question:"The ___ is the heart's natural pacemaker, spontaneously depolarizing at 60–100 beats per minute.",answer:null,answerText:"sinoatrial (SA) node",blankedWord:"sinoatrial (SA) node",explanation:"The SA node is located in the right atrium near the superior vena cava. It has the fastest intrinsic rate (60–100 bpm) so it dominates pacemaking. If it fails, the AV node takes over at 40–60 bpm."},
+  {id:19,subject:"Pharmacology",difficulty:"Medium",type:"mc",question:"Which drug class is first-line for managing type 2 diabetes without contraindications?",options:["Sulfonylureas","SGLT-2 inhibitors","Metformin","GLP-1 agonists"],answer:2,answerText:"Metformin",explanation:"Metformin is first-line due to efficacy, safety, low cost, weight neutrality, and cardiovascular benefits. It works by reducing hepatic gluconeogenesis.",wrongExplanations:["Sulfonylureas cause hypoglycemia and weight gain — second or third line.","SGLT-2 inhibitors are excellent second-line agents, especially with HF or CKD.","","GLP-1 agonists preferred when weight loss is priority — not first-line alone."]},
+  {id:20,subject:"Clinical Medicine",difficulty:"Medium",type:"free",question:"Describe the SIRS criteria and explain how Sepsis-3 changed the definition of sepsis.",answer:null,answerText:"",explanation:"SIRS (Systemic Inflammatory Response Syndrome) requires ≥2 of: temp >38°C or <36°C, HR >90 bpm, RR >20 or PaCO2 <32 mmHg, WBC >12,000 or <4,000 or >10% bands. The original Sepsis-1 and Sepsis-2 definitions used SIRS + suspected infection. Sepsis-3 (2016) abandoned SIRS because it was too sensitive and non-specific — even simple infections met criteria. Sepsis-3 redefines sepsis as life-threatening organ dysfunction from a dysregulated host response to infection, identified by SOFA score increase ≥2. Septic shock = sepsis + vasopressors needed + lactate >2 mmol/L despite adequate fluids.",keyPoints:["SIRS: ≥2 of temp/HR/RR/WBC criteria","Sepsis-3: SOFA ≥2 + suspected infection","Abandoned SIRS — too sensitive/non-specific","Septic shock: vasopressors + lactate >2"]},
+];
+
+// ─── AI GENERATION ────────────────────────────────────────────────────────────
+async function generateEliteQuestions({ subject, difficulty, count=10, mode="standard", questionType="mc", customTopic="", deepDiveTopic="", examType="", used=[] }) {
+  const apiKey = CONFIG.ANTHROPIC_KEY;
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY_HERE") return [];
+
+  const recentQ = used.slice(-10).map(q=>q.question).join("; ");
+  const subjectCtx = deepDiveTopic ? `"${deepDiveTopic}"` : subject==="All" ? "across all PA school subjects" : subject;
+
+  // Question type instructions
+  let typeInstr = "";
+  if (questionType === "mc" || questionType === "mixed") {
+    typeInstr += `
+MULTIPLE CHOICE format:
+{
+  "type": "mc",
+  "question": "clinical question",
+  "options": ["A","B","C","D"],
+  "answer": 0,
+  "answerText": "correct option text",
+  "explanation": "why correct",
+  "wrongExplanations": ["why A wrong","why B wrong","why C wrong","why D wrong"]
+}`;
+  }
+  if (questionType === "fitb" || questionType === "mixed") {
+    typeInstr += `
+FILL IN THE BLANK format (use ___ for the blank):
+{
+  "type": "fitb",
+  "question": "The ___ is responsible for X in context Y.",
+  "answer": null,
+  "answerText": "exact answer for the blank",
+  "blankedWord": "the word/phrase that was blanked",
+  "explanation": "clinical explanation"
+}`;
+  }
+  if (questionType === "free" || questionType === "mixed") {
+    typeInstr += `
+FREE RESPONSE format (open-ended clinical questions):
+{
+  "type": "free",
+  "question": "Explain/Describe/A patient presents with... what is your...",
+  "answer": null,
+  "answerText": "",
+  "explanation": "comprehensive model answer 3-5 sentences",
+  "keyPoints": ["key point 1", "key point 2", "key point 3", "key point 4"]
+}`;
+  }
+
+  const mixedInstr = questionType === "mixed"
+    ? "Generate a MIX: roughly 50% multiple choice, 25% fill in the blank, 25% free response. Vary the types throughout."
+    : `Generate ONLY ${questionType === "mc" ? "multiple choice" : questionType === "fitb" ? "fill in the blank" : "free response"} questions.`;
+
+  let modeInstr = "";
+  if (mode==="exam" && examType==="pance") modeInstr = "PANCE STYLE: Match NCCPA blueprint. Clinical vignettes with demographics, vitals, labs. Focus on diagnosis, management, next best step.";
+  else if (mode==="exam" && examType==="boards") modeInstr = "BOARD SIMULATION: Maximum difficulty. Test clinical reasoning. Include pharmacology pearls and management algorithms.";
+  else if (mode==="exam" && examType==="paschool") modeInstr = "PA SCHOOL MIDTERM: Mix conceptual and clinical. Cover pathophysiology mechanisms, MOA, anatomy.";
+  else if (mode==="strikes") modeInstr = "SURVIVAL MODE: Progressively harder. Tricky distractors testing deep understanding.";
+  else if (deepDiveTopic) modeInstr = `DEEP DIVE: Generate highly specific questions about "${deepDiveTopic}". Cover pathophysiology, clinical presentation, diagnosis, treatment, complications.`;
+  else if (customTopic) modeInstr = `CUSTOM TOPIC: "${customTopic}". Generate questions specifically about this topic at PA school level.`;
+
+  const prompt = `You are an elite PA school educator and board exam question writer with 20 years of experience.
+
+Generate ${count} high-quality, clinically accurate PA school questions.
+
 Subject: ${subjectCtx}
-Difficulty: ${difficulty&&difficulty!=="All"?difficulty:"mix of Easy, Medium, Hard"}
-Do NOT repeat: ${recent}
-Return ONLY valid JSON array, no markdown:
-[{"subject":"exact subject","difficulty":"Easy|Medium|Hard","question":"text","options":["A","B","C","D"],"answer":0,"explanation":"2-3 sentence explanation"}]
-answer = 0-based index. Board-style clinical questions. Valid JSON only.`;
+Difficulty: ${difficulty&&difficulty!=="All"?difficulty:"mix of Easy (20%), Medium (50%), Hard (30%)"}
+${modeInstr}
+
+${mixedInstr}
+
+QUESTION TYPE FORMATS:
+${typeInstr}
+
+QUALITY STANDARDS:
+- Clinically realistic and board-accurate
+- Clinical vignettes with patient details when appropriate
+- Wrong answer choices must be plausible distractors
+- Explanations must teach, not just confirm
+- Free response questions should have comprehensive model answers with key points
+- Fill in the blank should blank the most clinically important term
+- Never repeat: ${recentQ}
+
+Return ONLY a valid JSON array, no markdown, no preamble. Each object must have a "type" field ("mc", "fitb", or "free") and a "subject" field matching one of the PA school subjects.`;
+
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:prompt}]})
     });
     const data = await res.json();
     const text = data.content?.find(b=>b.type==="text")?.text||"[]";
     const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
     return parsed.map((q,i)=>({...q,id:Date.now()+i,ai:true}));
-  } catch(e) { return []; }
+  } catch(e) { console.error("AI error:",e); return []; }
 }
 
-// ── STYLES ──
+// ─── AI FREE RESPONSE GRADING ─────────────────────────────────────────────────
+async function gradeResponse(question, modelAnswer, keyPoints, userAnswer) {
+  const apiKey = CONFIG.ANTHROPIC_KEY;
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY_HERE") {
+    return { score: null, feedback: "Add your Anthropic API key to enable AI grading.", correct: null };
+  }
+  const prompt = `You are a PA school professor grading a student's free response answer.
+
+Question: ${question}
+
+Model Answer: ${modelAnswer}
+
+Key Points to cover: ${keyPoints ? keyPoints.join(", ") : ""}
+
+Student's Answer: ${userAnswer}
+
+Grade this response. Be fair but rigorous — this is PA school level.
+
+Return ONLY valid JSON:
+{
+  "score": 85,
+  "grade": "B",
+  "correct": true,
+  "feedback": "2-3 sentence personalized feedback on what they got right and what to improve",
+  "missedPoints": ["any key points they missed"],
+  "strengths": ["what they did well"]
+}
+
+Score 0-100. correct = true if score >= 70.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await res.json();
+    const text = data.content?.find(b=>b.type==="text")?.text||"{}";
+    return JSON.parse(text.replace(/```json|```/g,"").trim());
+  } catch(e) { return { score:null, feedback:"Could not grade response.", correct:null }; }
+}
+
+// ─── DESIGN ───────────────────────────────────────────────────────────────────
 const S = {
   page:{minHeight:"100vh",background:"#07091a",backgroundImage:"radial-gradient(ellipse at 10% 10%,rgba(0,201,167,0.07) 0%,transparent 50%),radial-gradient(ellipse at 90% 90%,rgba(132,94,194,0.07) 0%,transparent 50%)",display:"flex",flexDirection:"column",alignItems:"center",paddingBottom:80},
-  wrap:{width:"100%",maxWidth:600,padding:"0 20px"},
+  wrap:{width:"100%",maxWidth:640,padding:"0 20px"},
   card:{background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:20},
   inp:{width:"100%",padding:"13px 16px",borderRadius:11,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#eef2ff",fontSize:14,outline:"none",boxSizing:"border-box"},
-  primaryBtn:{width:"100%",padding:"16px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:15,fontWeight:700,boxShadow:"0 6px 24px rgba(0,201,167,0.3)",transition:"all 0.15s"},
+  primaryBtn:(x={})=>({width:"100%",padding:"16px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:15,fontWeight:700,boxShadow:"0 6px 24px rgba(0,201,167,0.28)",transition:"all 0.15s",...x}),
   ghostBtn:{width:"100%",padding:"14px",borderRadius:12,cursor:"pointer",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"#6a7a9a",fontSize:14},
-  label:{fontSize:10,letterSpacing:5,color:"#4a5a7a",textTransform:"uppercase",fontFamily:"monospace",marginBottom:10,display:"block"},
+  lbl:{fontSize:10,letterSpacing:5,color:"#4a5a7a",textTransform:"uppercase",fontFamily:"monospace",marginBottom:10,display:"block"},
 };
 
-const Logo = ()=><span style={{fontWeight:700,fontSize:17,background:"linear-gradient(135deg,#00C9A7,#845EC2)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>PA Prep Pro</span>;
+const Logo=()=><span style={{fontWeight:700,fontSize:17,background:"linear-gradient(135deg,#00C9A7,#845EC2)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>PA Prep Pro</span>;
+const Pill=({children,color="#00C9A7"})=><span style={{fontSize:10,padding:"3px 10px",borderRadius:99,background:`${color}18`,color,fontFamily:"monospace",letterSpacing:1}}>{children}</span>;
+const PBar=({value,max,color="#00C9A7",h=3})=><div style={{height:h,background:"rgba(255,255,255,0.05)",borderRadius:99}}><div style={{height:"100%",width:`${Math.min((value/Math.max(max,1))*100,100)}%`,background:color,borderRadius:99,transition:"width 0.6s ease"}}/></div>;
+const FBtn=({label,active,color,onClick})=><button onClick={onClick} style={{padding:"7px 13px",borderRadius:20,fontSize:12,cursor:"pointer",transition:"all 0.15s",border:active?`1px solid ${color}`:"1px solid rgba(255,255,255,0.07)",background:active?`${color}22`:"rgba(255,255,255,0.03)",color:active?color:"#5a6d94"}}>{label}</button>;
+const Spinner=({msg=""})=><div style={{...S.page,justifyContent:"center"}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,minHeight:"80vh",justifyContent:"center"}}><div style={{width:44,height:44,borderRadius:"50%",border:"3px solid rgba(0,201,167,0.15)",borderTopColor:"#00C9A7",animation:"spin 0.8s linear infinite"}}/><div style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace",textAlign:"center",maxWidth:280}}>{msg||"Loading…"}</div></div></div>;
 
-const Pill = ({children,color="#00C9A7"})=><span style={{fontSize:10,padding:"3px 10px",borderRadius:99,background:`${color}18`,color,fontFamily:"monospace",letterSpacing:1}}>{children}</span>;
+// ─── QUESTION TYPE BADGE ──────────────────────────────────────────────────────
+const QTypeBadge = ({type})=>{
+  const map = {mc:{label:"Multiple Choice",color:"#00C9A7"},fitb:{label:"Fill in the Blank",color:"#845EC2"},free:{label:"Free Response",color:"#FF6F91"}};
+  const t = map[type]||map.mc;
+  return <Pill color={t.color}>{t.label}</Pill>;
+};
 
-const PBar = ({value,max,color="#00C9A7",h=3})=>(
-  <div style={{height:h,background:"rgba(255,255,255,0.05)",borderRadius:99}}>
-    <div style={{height:"100%",width:`${Math.min((value/max)*100,100)}%`,background:color,borderRadius:99,transition:"width 0.6s ease"}}/>
-  </div>
-);
+// ─── FILL IN THE BLANK RENDERER ───────────────────────────────────────────────
+const FITBQuestion = ({question,revealed,userAnswer,onAnswer,onReveal})=>{
+  const [input,setInput] = React.useState("");
+  const parts = question.split("___");
 
-const FBtn = ({label,active,color,onClick})=>(
-  <button onClick={onClick} style={{padding:"7px 13px",borderRadius:20,fontSize:12,cursor:"pointer",transition:"all 0.15s",
-    border:active?`1px solid ${color}`:"1px solid rgba(255,255,255,0.07)",
-    background:active?`${color}22`:"rgba(255,255,255,0.03)",color:active?color:"#5a6d94"}}>
-    {label}
-  </button>
-);
+  return (
+    <div>
+      <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.9,marginBottom:20,color:"#dde6ff"}}>
+        {parts[0]}
+        {!revealed?(
+          <input
+            value={input}
+            onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&input.trim()&&onReveal(input)}
+            placeholder="type answer..."
+            style={{display:"inline-block",width:180,padding:"4px 10px",borderRadius:8,border:"1px solid rgba(132,94,194,0.5)",background:"rgba(132,94,194,0.1)",color:"#a8c0ff",fontSize:14,outline:"none",margin:"0 4px",verticalAlign:"middle"}}
+          />
+        ):(
+          <span style={{display:"inline-block",padding:"4px 12px",borderRadius:8,background:userAnswer?"rgba(0,201,167,0.15)":"rgba(255,111,145,0.15)",color:userAnswer?"#00C9A7":"#FF6F91",fontWeight:700,margin:"0 4px",border:`1px solid ${userAnswer?"rgba(0,201,167,0.4)":"rgba(255,111,145,0.4)"}`}}>
+            {userAnswer||"(not answered)"}
+          </span>
+        )}
+        {parts[1]}
+      </div>
+      {!revealed&&(
+        <button onClick={()=>onReveal(input)} disabled={!input.trim()} style={{...S.primaryBtn({background:"linear-gradient(135deg,#845EC2,#6a44aa)",opacity:input.trim()?1:0.5})}}>
+          Submit Answer →
+        </button>
+      )}
+    </div>
+  );
+};
 
-// ── MAIN APP ──
+// ─── FREE RESPONSE RENDERER ───────────────────────────────────────────────────
+const FreeResponseQuestion = ({question,onSubmit,revealed,aiGrade,loading})=>{
+  const [text,setText] = React.useState("");
+  return (
+    <div>
+      <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.8,marginBottom:16,color:"#dde6ff"}}>{question}</div>
+      {!revealed?(
+        <div>
+          <span style={S.lbl}>Your Response</span>
+          <textarea
+            value={text}
+            onChange={e=>setText(e.target.value)}
+            placeholder="Write your clinical answer here. Be thorough — this is graded like a PA school exam."
+            style={{...S.inp,minHeight:140,resize:"vertical",marginBottom:12,lineHeight:1.6}}
+          />
+          <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12,textAlign:"right",fontFamily:"monospace"}}>{text.split(" ").filter(Boolean).length} words</div>
+          <button onClick={()=>text.trim()&&onSubmit(text)} disabled={!text.trim()||loading} style={{...S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)",opacity:text.trim()&&!loading?1:0.5})}}>
+            {loading?"AI Grading…":"Submit for AI Grading →"}
+          </button>
+        </div>
+      ):(
+        <div style={{...S.card,background:"rgba(255,255,255,0.02)",borderColor:"rgba(255,255,255,0.06)"}}>
+          <span style={{...S.lbl,color:"#6a7a9a"}}>Your Response</span>
+          <p style={{fontSize:13,color:"#6a7a9a",lineHeight:1.7,fontStyle:"italic"}}>{text}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
-  const [screen,setScreen]   = React.useState("landing");
-  const [authMode,setAuthMode] = React.useState("signup");
-  const [form,setForm]       = React.useState({name:"",email:"",password:""});
-  const [formErr,setFormErr] = React.useState("");
-  const [user,setUser]       = React.useState(()=>store.get("paprep_user"));
-  const [prog,setProg]       = React.useState(()=>store.get("paprep_prog")||{totalAnswered:0,totalCorrect:0,sessions:0,subjectStats:{}});
-  const [bank,setBank]       = React.useState([...QUESTIONS]);
-  const [queue,setQueue]     = React.useState([]);
-  const [qIdx,setQIdx]       = React.useState(0);
-  const [picked,setPicked]   = React.useState(null);
-  const [score,setScore]     = React.useState(0);
-  const [answers,setAnswers] = React.useState([]);
-  const [streak,setStreak]   = React.useState(0);
-  const [bestStreak,setBest] = React.useState(0);
-  const [stats,setStats]     = React.useState({});
-  const [subj,setSubj]       = React.useState("All");
-  const [diff,setDiff]       = React.useState("All");
-  const [animIn,setAnimIn]   = React.useState(true);
-  const [loading,setLoading] = React.useState(false);
-  const [loadMsg,setLoadMsg] = React.useState("");
-  const [bgFill,setBgFill]   = React.useState(false);
+  const [screen,setScreen]           = React.useState("landing");
+  const [tab,setTab]                 = React.useState("study");
+  const [authMode,setAuthMode]       = React.useState("signup");
+  const [form,setForm]               = React.useState({name:"",email:"",password:""});
+  const [formErr,setFormErr]         = React.useState("");
+  const [user,setUser]               = React.useState(()=>store.get("paprep_user"));
+  const [loading,setLoading]         = React.useState(false);
+  const [loadMsg,setLoadMsg]         = React.useState("");
+  const [prog,setProg]               = React.useState(()=>store.get("paprep_prog")||{totalAnswered:0,totalCorrect:0,sessions:0,subjectStats:{},highScore:0});
+  const [mastered,setMastered]       = React.useState(()=>store.get("paprep_mastered")||[]);
+  const [learnBank,setLearnBank]     = React.useState(()=>store.get("paprep_learn")||[]);
+  const [bank,setBank]               = React.useState([...SEED_QUESTIONS]);
+  const [studyMode,setStudyMode]     = React.useState(null);
+  const [questionType,setQuestionType] = React.useState("mixed");
+  const [examType,setExamType]       = React.useState(null);
+  const [customTopic,setCustomTopic] = React.useState("");
+  const [deepDiveTopic,setDeepDiveTopic] = React.useState("");
+  const [activeModule,setActiveModule]   = React.useState(null);
+  const [subject,setSubject]         = React.useState("All");
+  const [difficulty,setDiff]         = React.useState("All");
+  const [queue,setQueue]             = React.useState([]);
+  const [qIdx,setQIdx]               = React.useState(0);
+  const [picked,setPicked]           = React.useState(null);
+  const [fitbAnswer,setFitbAnswer]   = React.useState("");
+  const [fitbCorrect,setFitbCorrect] = React.useState(null);
+  const [freeText,setFreeText]       = React.useState("");
+  const [aiGrade,setAiGrade]         = React.useState(null);
+  const [gradingLoading,setGradingLoading] = React.useState(false);
+  const [revealed,setRevealed]       = React.useState(false);
+  const [score,setScore]             = React.useState(0);
+  const [strikes,setStrikes]         = React.useState(0);
+  const [answers,setAnswers]         = React.useState([]);
+  const [streak,setStreak]           = React.useState(0);
+  const [bestStreak,setBest]         = React.useState(0);
+  const [sessionStats,setStats]      = React.useState({});
+  const [animIn,setAnimIn]           = React.useState(true);
+  const [shaking,setShaking]         = React.useState(false);
+  const [timeLeft,setTimeLeft]       = React.useState(null);
+  const [examStarted,setExamStarted] = React.useState(false);
+  const [flashFlipped,setFlipped]    = React.useState(false);
+  const [flashIdx,setFlashIdx]       = React.useState(0);
+  const [bgFill,setBgFill]           = React.useState(false);
+  const [customQ,setCustomQ]         = React.useState("");
+  const [customCount,setCustomCount] = React.useState(30);
+  const [customTime,setCustomTime]   = React.useState(45);
+  const [labIdx,setLabIdx]           = React.useState(0);
+  const [labAnswered,setLabAnswered] = React.useState(false);
+  const [labInput,setLabInput]       = React.useState("");
 
   const q = queue[qIdx];
   const isPro = user?.pro||false;
   const hitLimit = !isPro && prog.totalAnswered >= CONFIG.FREE_LIMIT;
-  const overallPct = prog.totalAnswered ? Math.round((prog.totalCorrect/prog.totalAnswered)*100) : 0;
+  const overallPct = prog.totalAnswered ? Math.round((prog.totalCorrect/prog.totalAnswered)*100):0;
+  const pct = queue.length ? Math.round((score/queue.length)*100):0;
 
   React.useEffect(()=>{store.set("paprep_prog",prog);},[prog]);
   React.useEffect(()=>{if(user)store.set("paprep_user",user);},[user]);
+  React.useEffect(()=>{store.set("paprep_mastered",mastered);},[mastered]);
+  React.useEffect(()=>{store.set("paprep_learn",learnBank);},[learnBank]);
 
-  // background AI fill
   React.useEffect(()=>{
-    if(bank.length<120&&!bgFill){
+    if(screen!=="quiz"||studyMode!=="exam"||!examStarted||timeLeft===null)return;
+    if(timeLeft<=0){endSession();return;}
+    const t=setTimeout(()=>setTimeLeft(s=>s-1),1000);
+    return()=>clearTimeout(t);
+  },[screen,studyMode,examStarted,timeLeft]);
+
+  React.useEffect(()=>{
+    if(bank.length<80&&!bgFill&&CONFIG.ANTHROPIC_KEY!=="YOUR_ANTHROPIC_API_KEY_HERE"){
       setBgFill(true);
-      Promise.all(SUBJECTS.slice(1).flatMap(s=>DIFFS.map(d=>generateAIQuestions(s,d,5,bank))))
+      Promise.all(SUBJECTS.slice(1).flatMap(s=>["mc","fitb","free"].map(t=>generateEliteQuestions({subject:s,difficulty:"Medium",count:2,questionType:t,used:bank}))))
         .then(r=>{const nq=r.flat().map((q,i)=>({...q,id:Date.now()+i}));setBank(b=>[...b,...nq]);})
         .finally(()=>setBgFill(false));
     }
   },[bank.length,bgFill]);
 
-  const handleAuth = ()=>{
+  const handleAuth=()=>{
     if(!form.email||!form.password){setFormErr("Please fill in all fields.");return;}
     if(authMode==="signup"&&!form.name){setFormErr("Please enter your name.");return;}
     const u={name:form.name||form.email.split("@")[0],email:form.email,pro:false};
-    setUser(u); setFormErr(""); setScreen("dashboard");
+    setUser(u);setFormErr("");setScreen("dashboard");
+  };
+  const logout=()=>{store.set("paprep_user",null);setUser(null);setScreen("landing");};
+  const activatePro=()=>{const u={...user,pro:true};setUser(u);store.set("paprep_user",u);};
+
+  // Filter bank by question type
+  const filterByType = (pool, qType) => {
+    if (qType === "mixed") return pool;
+    return pool.filter(q => (q.type||"mc") === qType);
   };
 
-  const logout = ()=>{store.set("paprep_user",null);setUser(null);setScreen("landing");};
+  const buildQueue=async(mode,eType,cTopic,ddTopic,count=15)=>{
+    let pool=[];
+    if(mode==="learn") pool=[...learnBank].sort(()=>Math.random()-0.5);
+    else if(mode==="mastered") pool=[...mastered].sort(()=>Math.random()-0.5);
+    else{
+      pool=bank.filter(q=>(subject==="All"||q.subject===subject)&&(difficulty==="All"||q.difficulty===difficulty));
+      pool=filterByType(pool,questionType).sort(()=>Math.random()-0.5);
+    }
 
-  const activatePro = ()=>{
-    const u={...user,pro:true};
-    setUser(u); store.set("paprep_user",u);
+    let finalCount=count;
+    if(mode==="exam"){if(eType==="pance")finalCount=60;else if(eType==="boards")finalCount=120;else if(eType==="paschool")finalCount=50;else finalCount=customCount;}
+    if(mode==="strikes")finalCount=999;
+    if(mode==="deepdive")finalCount=15;
+
+    let selected=pool.slice(0,Math.min(finalCount,pool.length));
+    const needsAI=CONFIG.ANTHROPIC_KEY!=="YOUR_ANTHROPIC_API_KEY_HERE";
+
+    if((selected.length<Math.min(finalCount,15)||ddTopic)&&needsAI){
+      setLoadMsg(ddTopic?`Generating deep dive: "${ddTopic}"…`:"Generating questions…");
+      const needed=Math.min(finalCount,30)-selected.length+5;
+      const ai=await generateEliteQuestions({subject,difficulty,count:Math.max(needed,10),mode,questionType,examType:eType,customTopic:cTopic,deepDiveTopic:ddTopic,used:bank});
+      const withIds=ai.map((q,i)=>({...q,id:Date.now()+i}));
+      setBank(b=>[...b,...withIds]);
+      selected=[...selected,...withIds].slice(0,mode==="strikes"?999:finalCount);
+    }
+    return selected;
   };
 
-  const startQuiz = async ()=>{
+  const startStudy=async(mode,eType="",cTopic="",ddTopic="")=>{
     if(hitLimit){setScreen("paywall");return;}
-    setLoading(true); setLoadMsg("Loading questions…");
+    setLoading(true);setLoadMsg("Loading questions…");
     try{
-      let pool = bank.filter(q=>(subj==="All"||q.subject===subj)&&(diff==="All"||q.difficulty===diff)).sort(()=>Math.random()-0.5).slice(0,10);
-      if(pool.length<10){
-        setLoadMsg("Generating with AI…");
-        const ai = await generateAIQuestions(subj,diff,10-pool.length+4,bank);
-        const nq = ai.map((q,i)=>({...q,id:Date.now()+i}));
-        setBank(b=>[...b,...nq]);
-        pool=[...pool,...nq].slice(0,10);
-      }
-      setQueue(pool);setQIdx(0);setPicked(null);setScore(0);setAnswers([]);setStreak(0);setBest(0);
-      setAnimIn(false);
+      const q=await buildQueue(mode,eType,cTopic,ddTopic);
+      if(!q.length){setLoadMsg("No questions found. Try different filters.");setTimeout(()=>setScreen("dashboard"),2000);return;}
+      setQueue(q);setQIdx(0);setPicked(null);setFitbAnswer("");setFitbCorrect(null);
+      setFreeText("");setAiGrade(null);setRevealed(false);
+      setScore(0);setStrikes(0);setAnswers([]);setStreak(0);setBest(0);setAnimIn(false);
+      if(mode==="exam"){const mins=eType==="pance"?60:eType==="boards"?120:eType==="paschool"?75:customTime;setTimeLeft(mins*60);setExamStarted(true);}
+      setStudyMode(mode);setExamType(eType);setDeepDiveTopic(ddTopic);
       setTimeout(()=>{setAnimIn(true);setScreen("quiz");},80);
-    }catch(e){setLoadMsg("Error — try again.");setTimeout(()=>setScreen("dashboard"),2000);}
+    }catch(e){setLoadMsg("Error — please try again.");setTimeout(()=>setScreen("dashboard"),2000);}
     finally{setLoading(false);setLoadMsg("");}
   };
 
-  const handlePick = (idx)=>{
+  // Handle MC answer
+  const handlePickMC=(idx)=>{
     if(picked!==null||!q)return;
-    setPicked(idx);
+    setPicked(idx);setRevealed(true);
     const ok=idx===q.answer;
-    const ns=ok?streak+1:0;
-    setStreak(ns);if(ns>bestStreak)setBest(ns);
-    if(ok)setScore(s=>s+1);
-    setAnswers(a=>[...a,{ok,subject:q.subject}]);
+    recordAnswer(ok);
+  };
+
+  // Handle FITB answer
+  const handleFITB=(userInput)=>{
+    if(revealed||!q)return;
+    setFitbAnswer(userInput);setRevealed(true);
+    const correct = q.answerText && userInput.toLowerCase().trim().includes(q.answerText.toLowerCase().trim().split(" ")[0]);
+    setFitbCorrect(correct);
+    recordAnswer(correct);
+  };
+
+  // Handle Free Response submit
+  const handleFreeSubmit=async(text)=>{
+    if(revealed||!q)return;
+    setFreeText(text);setGradingLoading(true);
+    try{
+      const grade=await gradeResponse(q.question,q.explanation,q.keyPoints,text);
+      setAiGrade(grade);setRevealed(true);
+      recordAnswer(grade.correct);
+    }catch(e){setAiGrade({score:null,feedback:"Could not grade — see model answer below.",correct:null});setRevealed(true);recordAnswer(null);}
+    finally{setGradingLoading(false);}
+  };
+
+  const recordAnswer=(ok)=>{
+    if(ok===true){const ns=streak+1;setStreak(ns);if(ns>bestStreak)setBest(ns);setScore(s=>s+1);}
+    else if(ok===false){setStreak(0);if(studyMode==="strikes"){const ns2=strikes+1;setStrikes(ns2);setShaking(true);setTimeout(()=>setShaking(false),500);if(ns2>=5)setTimeout(()=>endSession(),1500);}}
+    setAnswers(a=>[...a,{ok,subject:q.subject,question:q}]);
+    if(q){
+      if(ok){setMastered(m=>{const e=m.find(x=>x.id===q.id);return e?m:[...m,q];});setLearnBank(l=>l.filter(x=>x.id!==q.id));}
+      else if(ok===false){setLearnBank(l=>{const e=l.find(x=>x.id===q.id);return e?l:[...l,q];});}
+    }
     setProg(p=>{
       const ss={...(p.subjectStats||{})};
       if(!ss[q.subject])ss[q.subject]={answered:0,correct:0};
-      ss[q.subject].answered++;if(ok)ss[q.subject].correct++;
-      return{...p,totalAnswered:p.totalAnswered+1,totalCorrect:p.totalCorrect+(ok?1:0),subjectStats:ss};
+      ss[q.subject].answered++;if(ok===true)ss[q.subject].correct++;
+      return{...p,totalAnswered:p.totalAnswered+1,totalCorrect:p.totalCorrect+(ok===true?1:0),subjectStats:ss};
     });
-    if(!isPro&&prog.totalAnswered+1>=CONFIG.FREE_LIMIT&&qIdx+1<queue.length){
-      setTimeout(()=>setScreen("paywall"),1400);
-    }
+    if(!isPro&&prog.totalAnswered+1>=CONFIG.FREE_LIMIT&&qIdx+1<queue.length)setTimeout(()=>setScreen("paywall"),1400);
   };
 
-  const nextQ = ()=>{
-    if(qIdx+1>=queue.length){
-      const st={};
-      SUBJECTS.slice(1).forEach(s=>{const sub=answers.filter(a=>a.subject===s);if(sub.length)st[s]={correct:sub.filter(a=>a.ok).length,total:sub.length};});
-      setStats(st);setProg(p=>({...p,sessions:p.sessions+1}));setScreen("results");
-    }else{
+  const endSession=()=>{
+    const st={};
+    SUBJECTS.slice(1).forEach(s=>{const sub=answers.filter(a=>a.subject===s);if(sub.length)st[s]={correct:sub.filter(a=>a.ok===true).length,total:sub.length};});
+    setStats(st);
+    const fs=Math.round((score/Math.max(queue.length,1))*100);
+    setProg(p=>({...p,sessions:p.sessions+1,highScore:Math.max(p.highScore||0,fs)}));
+    setScreen("results");
+  };
+
+  const nextQ=()=>{
+    if(studyMode==="strikes"&&strikes>=5){endSession();return;}
+    if(qIdx+1>=queue.length){endSession();}
+    else{
       setAnimIn(false);
-      setTimeout(()=>{setQIdx(i=>i+1);setPicked(null);setAnimIn(true);},180);
+      setTimeout(()=>{setQIdx(i=>i+1);setPicked(null);setFitbAnswer("");setFitbCorrect(null);setFreeText("");setAiGrade(null);setRevealed(false);setGradingLoading(false);setAnimIn(true);},200);
     }
   };
 
-  const pct = queue.length?Math.round((score/queue.length)*100):0;
+  const formatTime=(s)=>`${Math.floor(s/60)}:${(s%60).toString().padStart(2,"0")}`;
 
-  // ── LANDING ──
+  // Question type selector component
+  const QTypeSelector = ()=>(
+    <div style={{marginBottom:20}}>
+      <span style={S.lbl}>Question Type</span>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {Q_TYPES.map(t=>(
+          <button key={t.id} onClick={()=>setQuestionType(t.id)} style={{padding:"10px 12px",borderRadius:12,cursor:"pointer",textAlign:"left",transition:"all 0.15s",
+            border:questionType===t.id?`1px solid ${t.color}`:"1px solid rgba(255,255,255,0.07)",
+            background:questionType===t.id?`${t.color}15`:"rgba(255,255,255,0.03)"}}>
+            <div style={{fontSize:14,marginBottom:3}}>{t.icon} <span style={{fontWeight:700,color:questionType===t.id?t.color:"#dde6ff",fontSize:13}}>{t.label}</span></div>
+            <div style={{fontSize:11,color:"#4a5a7a"}}>{t.desc}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LANDING
+  // ══════════════════════════════════════════════════════════════════════════
   if(screen==="landing") return (
     <div style={S.page}>
       <div style={S.wrap}>
@@ -266,77 +622,77 @@ function App() {
             <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"8px 18px",borderRadius:20,background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",border:"none"}}>Start free</button>
           </div>
         </nav>
-
-        <div style={{textAlign:"center",padding:"52px 0 44px"}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,letterSpacing:5,color:"#00C9A7",textTransform:"uppercase",fontFamily:"monospace",background:"rgba(0,201,167,0.08)",border:"1px solid rgba(0,201,167,0.2)",borderRadius:99,padding:"5px 16px",marginBottom:24}}>
+        <div style={{textAlign:"center",padding:"44px 0 36px"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,letterSpacing:5,color:"#00C9A7",textTransform:"uppercase",fontFamily:"monospace",background:"rgba(0,201,167,0.08)",border:"1px solid rgba(0,201,167,0.2)",borderRadius:99,padding:"5px 16px",marginBottom:20}}>
             ✦ Built for PA students, by a PA student
           </div>
-          <h1 style={{fontSize:"clamp(2.4rem,7vw,3.8rem)",fontWeight:700,margin:"0 0 20px",lineHeight:1.1,background:"linear-gradient(145deg,#ffffff 0%,#b0c8ff 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
-            Ace your PA school<br/>exams and boards
+          <h1 style={{fontSize:"clamp(2rem,6vw,3.4rem)",fontWeight:700,margin:"0 0 16px",lineHeight:1.1,background:"linear-gradient(145deg,#ffffff 0%,#b0c8ff 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+            The elite PA school<br/>prep platform
           </h1>
-          <p style={{color:"#5a6d94",fontSize:16,lineHeight:1.8,maxWidth:400,margin:"0 auto 36px"}}>
-            Adaptive AI-powered quizzes across all 5 core PA school subjects. Infinite questions. Detailed clinical explanations.
+          <p style={{color:"#5a6d94",fontSize:15,lineHeight:1.8,maxWidth:420,margin:"0 auto 28px"}}>
+            Board-quality AI questions in multiple choice, fill in the blank, and free response. 6 study modes. Deep Dive modules for every PA school subject.
           </p>
-          <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"18px 44px",borderRadius:14,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:17,fontWeight:700,boxShadow:"0 8px 36px rgba(0,201,167,0.32)"}}>
+          <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"16px 40px",borderRadius:14,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:16,fontWeight:700,boxShadow:"0 8px 36px rgba(0,201,167,0.32)"}}>
             Start free — 10 questions on us →
           </button>
-          <div style={{marginTop:12,fontSize:12,color:"#2a3a5a"}}>No credit card · Upgrade anytime</div>
+          <div style={{marginTop:10,fontSize:12,color:"#2a3a5a"}}>No credit card · Upgrade anytime</div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:44}}>
-          {[["50+","Seed questions"],["∞","AI generated"],["5","Core subjects"]].map(([n,l])=>(
-            <div key={l} style={{...S.card,textAlign:"center",padding:"18px 10px"}}>
-              <div style={{fontSize:26,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
-              <div style={{fontSize:11,color:"#4a5a7a",marginTop:5}}>{l}</div>
+        {/* Question type preview */}
+        <div style={{...S.card,marginBottom:24,borderColor:"rgba(0,201,167,0.15)"}}>
+          <span style={S.lbl}>3 Question Formats</span>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {Q_TYPES.slice(0,3).map(t=>(
+              <div key={t.id} style={{padding:"12px 10px",borderRadius:10,background:`${t.color}10`,border:`1px solid ${t.color}25`,textAlign:"center"}}>
+                <div style={{fontSize:20,marginBottom:4}}>{t.icon}</div>
+                <div style={{fontSize:11,fontWeight:700,color:t.color}}>{t.label}</div>
+                <div style={{fontSize:10,color:"#4a5a7a",marginTop:3}}>{t.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
+          {[["3","Question Types"],["6","Study Modes"],["7","Deep Dive Modules"]].map(([n,l])=>(
+            <div key={l} style={{...S.card,textAlign:"center",padding:"14px 8px"}}>
+              <div style={{fontSize:20,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
+              <div style={{fontSize:11,color:"#4a5a7a",marginTop:4}}>{l}</div>
             </div>
           ))}
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:44}}>
-          {[["🧠","AI Question Engine","Infinite board-style questions generated on demand. Never repeats."],
-            ["📊","Progress Tracking","Performance by subject, streaks, and accuracy across every session."],
-            ["⚡","Instant Explanations","Detailed clinical explanation with every single answer."],
-            ["🎯","Difficulty Filters","Easy, Medium, or Hard — match your current study phase."]].map(([icon,title,desc])=>(
-            <div key={title} style={S.card}>
-              <div style={{fontSize:22,marginBottom:8}}>{icon}</div>
-              <div style={{fontSize:13,fontWeight:700,color:"#c0ccee",marginBottom:6}}>{title}</div>
-              <div style={{fontSize:12,color:"#4a5a7a",lineHeight:1.6}}>{desc}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:44}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
           <div style={S.card}>
-            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:8,fontFamily:"monospace"}}>FREE</div>
-            <div style={{fontSize:32,fontWeight:700,color:"#dde6ff"}}>$0</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:18}}>forever</div>
-            {["10 questions total","All 5 subjects","Full explanations"].map(f=>(
-              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:7,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:6,fontFamily:"monospace"}}>FREE</div>
+            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$0</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>forever</div>
+            {["10 questions","All question types","Full explanations"].map(f=>(
+              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:5,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
           </div>
           <div style={{...S.card,border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.04)",position:"relative"}}>
             <div style={{position:"absolute",top:-11,right:12,fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700}}>POPULAR</div>
-            <div style={{fontSize:11,color:"#00C9A7",marginBottom:8,fontFamily:"monospace"}}>PRO</div>
-            <div style={{fontSize:32,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:18}}>/mo · or $99/yr</div>
-            {["Unlimited AI questions","Progress tracking","Mock timed exams","All subjects + filters"].map(f=>(
-              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:7,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
+            <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
+            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · or $99/yr</div>
+            {["Unlimited AI questions","MC + FITB + Free Response","AI grading for free response","Deep Dive modules","Board-style exams","Custom topic generator"].map(f=>(
+              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:5,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
           </div>
         </div>
 
-        <div style={{...S.card,textAlign:"center",borderColor:"rgba(0,201,167,0.2)",background:"rgba(0,201,167,0.04)",padding:32,marginBottom:32}}>
-          <h3 style={{margin:"0 0 8px",fontSize:20,color:"#dde6ff"}}>Ready to start?</h3>
-          <p style={{color:"#4a5a7a",fontSize:14,margin:"0 0 20px"}}>Join PA students using AI to crush their boards.</p>
-          <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"16px 36px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:15,fontWeight:700,boxShadow:"0 4px 20px rgba(0,201,167,0.28)"}}>
-            Create free account →
-          </button>
+        <div style={{...S.card,textAlign:"center",borderColor:"rgba(0,201,167,0.2)",background:"rgba(0,201,167,0.04)",padding:24,marginBottom:32}}>
+          <h3 style={{margin:"0 0 8px",fontSize:18,color:"#dde6ff"}}>Ready to dominate your boards?</h3>
+          <p style={{color:"#4a5a7a",fontSize:13,margin:"0 0 16px"}}>Join PA students using AI to prepare smarter.</p>
+          <button onClick={()=>{setAuthMode("signup");setScreen("auth");}} style={{padding:"13px 28px",borderRadius:12,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:14,fontWeight:700}}>Create free account →</button>
         </div>
       </div>
     </div>
   );
 
-  // ── AUTH ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // AUTH
+  // ══════════════════════════════════════════════════════════════════════════
   if(screen==="auth") return (
     <div style={S.page}>
       <div style={{...S.wrap,maxWidth:420}}>
@@ -347,270 +703,611 @@ function App() {
           <p style={{color:"#4a5a7a",fontSize:13}}>{authMode==="login"?"Sign in to continue":"Start with 10 free questions"}</p>
         </div>
         <div style={{...S.card,padding:24}}>
-          {authMode==="signup"&&(
-            <div style={{marginBottom:14}}>
-              <span style={S.label}>Full Name</span>
-              <input style={S.inp} placeholder="Your name" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
-            </div>
-          )}
-          <div style={{marginBottom:14}}>
-            <span style={S.label}>Email</span>
-            <input style={S.inp} type="email" placeholder="you@email.com" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
-          </div>
-          <div style={{marginBottom:20}}>
-            <span style={S.label}>Password</span>
-            <input style={S.inp} type="password" placeholder="••••••••" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
-          </div>
+          {authMode==="signup"&&<div style={{marginBottom:14}}><span style={S.lbl}>Full Name</span><input style={S.inp} placeholder="Your name" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/></div>}
+          <div style={{marginBottom:14}}><span style={S.lbl}>Email</span><input style={S.inp} type="email" placeholder="you@email.com" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/></div>
+          <div style={{marginBottom:20}}><span style={S.lbl}>Password</span><input style={S.inp} type="password" placeholder="••••••••" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/></div>
           {formErr&&<div style={{fontSize:12,color:"#FF6F91",marginBottom:12,textAlign:"center"}}>{formErr}</div>}
-          <button onClick={handleAuth} style={S.primaryBtn}>{authMode==="login"?"Sign in →":"Create account →"}</button>
+          <button onClick={handleAuth} style={S.primaryBtn()}>{authMode==="login"?"Sign in →":"Create account →"}</button>
           <div style={{textAlign:"center",marginTop:14,fontSize:12,color:"#4a5a7a"}}>
             {authMode==="login"?"Don't have an account? ":"Already have an account? "}
-            <span style={{color:"#00C9A7",cursor:"pointer"}} onClick={()=>setAuthMode(m=>m==="login"?"signup":"login")}>
-              {authMode==="login"?"Sign up":"Sign in"}
-            </span>
+            <span style={{color:"#00C9A7",cursor:"pointer"}} onClick={()=>setAuthMode(m=>m==="login"?"signup":"login")}>{authMode==="login"?"Sign up":"Sign in"}</span>
           </div>
         </div>
       </div>
     </div>
   );
 
-  // ── LOADING ──
-  if(loading) return (
-    <div style={{...S.page,justifyContent:"center"}}>
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,minHeight:"80vh",justifyContent:"center"}}>
-        <div style={{width:44,height:44,borderRadius:"50%",border:"3px solid rgba(0,201,167,0.15)",borderTopColor:"#00C9A7",animation:"spin 0.8s linear infinite"}}/>
-        <div style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{loadMsg}</div>
-      </div>
-    </div>
-  );
+  if(loading) return <Spinner msg={loadMsg}/>;
 
-  // ── PAYWALL ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAYWALL
+  // ══════════════════════════════════════════════════════════════════════════
   if(screen==="paywall") return (
     <div style={S.page}>
       <div style={{...S.wrap,maxWidth:480}}>
-        <div style={{textAlign:"center",padding:"56px 0 28px"}}>
-          <div style={{fontSize:52,marginBottom:16}}>🔒</div>
-          <h2 style={{fontSize:24,fontWeight:700,color:"#dde6ff",margin:"0 0 10px"}}>You've used your {CONFIG.FREE_LIMIT} free questions</h2>
-          <p style={{color:"#4a5a7a",fontSize:14,lineHeight:1.8,margin:"0 auto 32px",maxWidth:360}}>Upgrade to PA Prep Pro for unlimited AI-generated questions and everything you need to dominate your boards.</p>
+        <div style={{textAlign:"center",padding:"52px 0 24px"}}>
+          <div style={{fontSize:48,marginBottom:14}}>🔒</div>
+          <h2 style={{fontSize:22,fontWeight:700,color:"#dde6ff",margin:"0 0 10px"}}>You've used your {CONFIG.FREE_LIMIT} free questions</h2>
+          <p style={{color:"#4a5a7a",fontSize:14,lineHeight:1.8,margin:"0 auto 24px",maxWidth:340}}>Upgrade for unlimited AI questions in all three formats, AI grading, Deep Dive modules, and board-style exams.</p>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-          <div style={{...S.card,padding:24,textAlign:"center"}}>
-            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:8,fontFamily:"monospace"}}>MONTHLY</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:20}}>/month</div>
-            <a href={CONFIG.MONTHLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro}
-              style={{display:"block",padding:"12px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#dde6ff",fontSize:13,textDecoration:"none",textAlign:"center"}}>
-              Get Monthly →
-            </a>
+          <div style={{...S.card,padding:22,textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:6,fontFamily:"monospace"}}>MONTHLY</div>
+            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:16}}>/month</div>
+            <a href={CONFIG.MONTHLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro} style={{display:"block",padding:"11px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#dde6ff",fontSize:13,textDecoration:"none",textAlign:"center"}}>Get Monthly →</a>
           </div>
-          <div style={{...S.card,padding:24,textAlign:"center",border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.05)",position:"relative"}}>
-            <div style={{position:"absolute",top:-11,left:"50%",transform:"translateX(-50%)",fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 12px",borderRadius:99,fontWeight:700,whiteSpace:"nowrap"}}>BEST VALUE</div>
-            <div style={{fontSize:11,color:"#00C9A7",marginBottom:8,fontFamily:"monospace"}}>YEARLY</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#dde6ff"}}>$99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:20}}>/year · save 45%</div>
-            <a href={CONFIG.YEARLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro}
-              style={{display:"block",padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",textAlign:"center"}}>
-              Get Yearly →
-            </a>
+          <div style={{...S.card,padding:22,textAlign:"center",border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.05)",position:"relative"}}>
+            <div style={{position:"absolute",top:-11,left:"50%",transform:"translateX(-50%)",fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700,whiteSpace:"nowrap"}}>BEST VALUE</div>
+            <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>YEARLY</div>
+            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:16}}>/year · save 45%</div>
+            <a href={CONFIG.YEARLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro} style={{display:"block",padding:"11px",borderRadius:10,background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",textAlign:"center"}}>Get Yearly →</a>
           </div>
         </div>
-        <div style={{...S.card,marginBottom:20}}>
-          <span style={S.label}>Everything in Pro</span>
-          {["Unlimited AI-generated questions","All 5 subjects + difficulty filters","Detailed progress tracking","Timed mock exam mode","New content every session"].map(f=>(
-            <div key={f} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-              <span style={{color:"#00C9A7",fontSize:14}}>✓</span>
-              <span style={{fontSize:13,color:"#7a8db0"}}>{f}</span>
-            </div>
-          ))}
-        </div>
-        <div style={{fontSize:11,color:"#2a3a5a",textAlign:"center",marginBottom:16}}>Secure payment via Stripe · Cancel anytime · Instant access</div>
-        <button onClick={()=>setScreen("dashboard")} style={S.ghostBtn}>← Back to dashboard</button>
+        <div style={{fontSize:11,color:"#2a3a5a",textAlign:"center",marginBottom:14}}>Secure · Stripe · Cancel anytime</div>
+        <button onClick={()=>setScreen("dashboard")} style={S.ghostBtn}>← Back</button>
       </div>
     </div>
   );
 
-  // ── DASHBOARD ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // DASHBOARD
+  // ══════════════════════════════════════════════════════════════════════════
   if(screen==="dashboard") return (
     <div style={S.page}>
       <div style={S.wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"22px 0"}}>
           <Logo/>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {isPro
-              ?<span style={{fontSize:10,padding:"4px 10px",borderRadius:99,background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontFamily:"monospace"}}>PRO ✦</span>
-              :<button onClick={()=>setScreen("paywall")} style={{padding:"7px 16px",borderRadius:20,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:12,fontWeight:700}}>Upgrade</button>
-            }
+            {isPro?<span style={{fontSize:10,padding:"4px 10px",borderRadius:99,background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontFamily:"monospace"}}>PRO ✦</span>
+              :<button onClick={()=>setScreen("paywall")} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:12,fontWeight:700}}>Upgrade</button>}
             <button onClick={logout} style={{background:"none",border:"none",color:"#4a5a7a",fontSize:12,cursor:"pointer"}}>Log out</button>
           </div>
         </div>
 
-        <div style={{marginBottom:24}}>
-          <span style={S.label}>Welcome back</span>
-          <h2 style={{fontSize:"clamp(1.5rem,4vw,2rem)",fontWeight:700,color:"#dde6ff"}}>Hey, {user?.name?.split(" ")[0]} 👋</h2>
+        <div style={{marginBottom:16}}>
+          <span style={S.lbl}>Welcome back</span>
+          <h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>Hey, {user?.name?.split(" ")[0]} 👋</h2>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
-          {[[prog.totalAnswered,"Answered"],[prog.totalCorrect,"Correct"],[`${overallPct}%`,"Accuracy"]].map(([n,l])=>(
-            <div key={l} style={{...S.card,textAlign:"center",padding:"14px 8px"}}>
-              <div style={{fontSize:20,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
-              <div style={{fontSize:11,color:"#4a5a7a",marginTop:4}}>{l}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
+          {[[prog.totalAnswered,"Answered"],[prog.totalCorrect,"Correct"],[`${overallPct}%`,"Accuracy"],[`${prog.highScore||0}%`,"Best"]].map(([n,l])=>(
+            <div key={l} style={{...S.card,textAlign:"center",padding:"11px 6px"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{n}</div>
+              <div style={{fontSize:10,color:"#4a5a7a",marginTop:3}}>{l}</div>
             </div>
           ))}
         </div>
 
         {!isPro&&(
-          <div style={{...S.card,marginBottom:20,borderColor:hitLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{...S.card,marginBottom:14,borderColor:hitLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
               <span style={{fontSize:12,color:"#8a9dc0"}}>Free questions used</span>
               <span style={{fontSize:12,color:hitLimit?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>{Math.min(prog.totalAnswered,CONFIG.FREE_LIMIT)}/{CONFIG.FREE_LIMIT}</span>
             </div>
             <PBar value={prog.totalAnswered} max={CONFIG.FREE_LIMIT} color={hitLimit?"#FF6F91":"#FFC75F"}/>
-            {hitLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:8,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
+            {hitLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:7,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
           </div>
         )}
 
-        <div style={{marginBottom:16}}>
-          <span style={S.label}>Subject</span>
-          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
-            {SUBJECTS.map(s=><FBtn key={s} label={s} active={subj===s} color={s==="All"?"#00C9A7":SC[s]} onClick={()=>setSubj(s)}/>)}
-          </div>
+        {/* Tabs */}
+        <div style={{display:"flex",gap:8,marginBottom:18,borderBottom:"1px solid rgba(255,255,255,0.07)",paddingBottom:10}}>
+          {[["study","Study"],["deepdive","🔬 Deep Dive"],["memory","📖 Memory"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{padding:"7px 16px",borderRadius:20,fontSize:12,cursor:"pointer",border:"none",
+              background:tab===id?"linear-gradient(135deg,#00C9A7,#009d84)":"rgba(255,255,255,0.05)",
+              color:tab===id?"#fff":"#5a6d94",fontWeight:tab===id?700:400}}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        <div style={{marginBottom:28}}>
-          <span style={S.label}>Difficulty</span>
-          <div style={{display:"flex",gap:7}}>
-            {["All",...DIFFS].map(d=><FBtn key={d} label={d} active={diff===d} color={d==="All"?"#a8c0ff":DC[d]} onClick={()=>setDiff(d)}/>)}
-          </div>
-        </div>
-
-        <button onClick={startQuiz} style={S.primaryBtn}>{hitLimit?"🔒 Upgrade to Continue":"Begin Quiz →"}</button>
-
-        {Object.keys(prog.subjectStats||{}).length>0&&(
-          <div style={{...S.card,marginTop:24}}>
-            <span style={S.label}>Performance by Subject</span>
-            {Object.entries(prog.subjectStats).map(([s,{answered,correct}])=>(
-              <div key={s} style={{marginBottom:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                  <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
-                  <span style={{fontSize:12,color:SC[s],fontFamily:"monospace"}}>{correct}/{answered} ({Math.round(correct/answered*100)}%)</span>
+        {/* ── STUDY TAB ── */}
+        {tab==="study"&&(
+          <div>
+            <QTypeSelector/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              {STUDY_MODES.map(m=>(
+                <div key={m.id} onClick={()=>{
+                  if(hitLimit){setScreen("paywall");return;}
+                  if(m.id==="exam")setScreen("examSetup");
+                  else if(m.id==="custom")setScreen("customSetup");
+                  else if(m.id==="lab")setScreen("lab");
+                  else if(m.id==="flashcard")startStudy("flashcard");
+                  else startStudy(m.id);
+                }} style={{...S.card,cursor:"pointer",borderColor:`${m.color}20`,transition:"all 0.2s"}}
+                  onMouseOver={e=>e.currentTarget.style.borderColor=`${m.color}50`}
+                  onMouseOut={e=>e.currentTarget.style.borderColor=`${m.color}20`}>
+                  <div style={{fontSize:18,marginBottom:5}}>{m.icon}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:m.color,marginBottom:2}}>{m.label}</div>
+                  <div style={{fontSize:11,color:"#4a5a7a",lineHeight:1.4}}>{m.desc}</div>
                 </div>
-                <PBar value={correct} max={answered} color={SC[s]}/>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div style={{marginBottom:12}}>
+              <span style={S.lbl}>Subject</span>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{SUBJECTS.map(s=><FBtn key={s} label={s} active={subject===s} color={s==="All"?"#00C9A7":SC[s]} onClick={()=>setSubject(s)}/>)}</div>
+            </div>
+            <div>
+              <span style={S.lbl}>Difficulty</span>
+              <div style={{display:"flex",gap:6}}>{["All",...DIFFS].map(d=><FBtn key={d} label={d} active={difficulty===d} color={d==="All"?"#a8c0ff":DC[d]} onClick={()=>setDiff(d)}/>)}</div>
+            </div>
           </div>
         )}
 
-        {bgFill&&<div style={{textAlign:"center",marginTop:16,fontSize:11,color:"#2a3a5a",fontFamily:"monospace"}}>⚡ AI expanding bank… ({bank.length} ready)</div>}
+        {/* ── DEEP DIVE TAB ── */}
+        {tab==="deepdive"&&(
+          <div>
+            {!activeModule?(
+              <div>
+                <div style={{marginBottom:14}}>
+                  <span style={S.lbl}>PA School Modules</span>
+                  <p style={{fontSize:13,color:"#4a5a7a",lineHeight:1.6}}>Drill deep into any PA school subject. AI generates targeted questions for each subtopic in your chosen format.</p>
+                </div>
+                <div style={{marginBottom:14}}>
+                  <QTypeSelector/>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {DEEP_DIVE_MODULES.map(m=>(
+                    <div key={m.id} onClick={()=>setActiveModule(m)} style={{...S.card,cursor:"pointer",borderColor:`${m.color}20`,transition:"all 0.2s",display:"flex",alignItems:"center",gap:12}}
+                      onMouseOver={e=>e.currentTarget.style.borderColor=`${m.color}50`}
+                      onMouseOut={e=>e.currentTarget.style.borderColor=`${m.color}20`}>
+                      <div style={{fontSize:26,flexShrink:0}}>{m.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:700,color:m.color,marginBottom:2}}>{m.label}</div>
+                        <div style={{fontSize:12,color:"#4a5a7a"}}>{m.desc}</div>
+                        <div style={{fontSize:10,color:"#3a4a6a",marginTop:3,fontFamily:"monospace"}}>{m.subtopics.length} subtopics</div>
+                      </div>
+                      <span style={{fontSize:16,color:"#4a5a7a"}}>→</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ):(
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+                  <button onClick={()=>setActiveModule(null)} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button>
+                  <div style={{fontSize:16}}>{activeModule.icon}</div>
+                  <div style={{fontSize:15,fontWeight:700,color:activeModule.color}}>{activeModule.label}</div>
+                </div>
+                <span style={S.lbl}>Choose a Subtopic</span>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {activeModule.subtopics.map(st=>(
+                    <div key={st.id} onClick={()=>{if(hitLimit){setScreen("paywall");return;}startStudy("deepdive","","",`${activeModule.label}: ${st.label}`);}}
+                      style={{...S.card,cursor:"pointer",padding:"13px 15px",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"space-between"}}
+                      onMouseOver={e=>e.currentTarget.style.borderColor=`${activeModule.color}40`}
+                      onMouseOut={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.07)"}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:"#dde6ff",marginBottom:2}}>{st.label}</div>
+                        <div style={{fontSize:12,color:"#4a5a7a"}}>{st.desc}</div>
+                      </div>
+                      <span style={{fontSize:15,color:activeModule.color,marginLeft:10}}>→</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MEMORY TAB ── */}
+        {tab==="memory"&&(
+          <div>
+            <span style={S.lbl}>Memory Folders</span>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+              <div style={{...S.card,borderColor:"rgba(0,201,167,0.2)",cursor:mastered.length>0?"pointer":"default"}} onClick={()=>mastered.length>0&&startStudy("mastered")}>
+                <div style={{fontSize:22,marginBottom:5}}>✅</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#00C9A7",marginBottom:2}}>Mastered</div>
+                <div style={{fontSize:12,color:"#4a5a7a"}}>{mastered.length} questions</div>
+                {mastered.length>0&&<div style={{fontSize:11,color:"#00C9A7",marginTop:5}}>Tap to review →</div>}
+              </div>
+              <div style={{...S.card,borderColor:"rgba(255,111,145,0.2)",cursor:learnBank.length>0?"pointer":"default"}} onClick={()=>learnBank.length>0&&startStudy("learn")}>
+                <div style={{fontSize:22,marginBottom:5}}>📖</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#FF6F91",marginBottom:2}}>Learn</div>
+                <div style={{fontSize:12,color:"#4a5a7a"}}>{learnBank.length} questions</div>
+                {learnBank.length>0&&<div style={{fontSize:11,color:"#FF6F91",marginTop:5}}>Tap to review →</div>}
+              </div>
+            </div>
+            {Object.keys(prog.subjectStats||{}).length>0&&(
+              <div style={S.card}>
+                <span style={S.lbl}>Performance by Subject</span>
+                {Object.entries(prog.subjectStats).map(([s,{answered,correct}])=>(
+                  <div key={s} style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
+                      <span style={{fontSize:12,color:SC[s]||"#00C9A7",fontFamily:"monospace"}}>{correct}/{answered} ({Math.round(correct/answered*100)}%)</span>
+                    </div>
+                    <PBar value={correct} max={answered} color={SC[s]||"#00C9A7"}/>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {bgFill&&<div style={{textAlign:"center",marginTop:14,fontSize:11,color:"#2a3a5a",fontFamily:"monospace"}}>⚡ AI expanding bank…</div>}
       </div>
     </div>
   );
 
-  // ── QUIZ ──
-  if(screen==="quiz"&&q) return (
+  // ══════════════════════════════════════════════════════════════════════════
+  // EXAM SETUP
+  // ══════════════════════════════════════════════════════════════════════════
+  if(screen==="examSetup") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{padding:"22px 0 8px"}}><button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button></div>
+        <div style={{marginBottom:18}}><span style={S.lbl}>Choose Your Exam</span><h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>Practice Exam</h2></div>
+        <QTypeSelector/>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {EXAM_TYPES.map(et=>(
+            <div key={et.id} onClick={()=>{if(et.id==="custom")setScreen("customExamSetup");else{setSubject("All");setDiff("All");startStudy("exam",et.id);}}}
+              style={{...S.card,cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"space-between"}}
+              onMouseOver={e=>e.currentTarget.style.borderColor="rgba(0,201,167,0.3)"}
+              onMouseOut={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.07)"}>
+              <div><div style={{fontSize:14,fontWeight:700,color:"#dde6ff",marginBottom:3}}>{et.label}</div><div style={{fontSize:12,color:"#4a5a7a"}}>{et.desc}</div></div>
+              <span style={{fontSize:18,color:"#4a5a7a"}}>→</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if(screen==="customExamSetup") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{padding:"22px 0 8px"}}><button onClick={()=>setScreen("examSetup")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button></div>
+        <div style={{marginBottom:18}}><span style={S.lbl}>Custom Exam</span><h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>Build Your Exam</h2></div>
+        <QTypeSelector/>
+        <div style={{...S.card,marginBottom:12}}><span style={S.lbl}>Number of Questions</span><input type="number" style={S.inp} value={customCount} onChange={e=>setCustomCount(parseInt(e.target.value)||30)} min="5" max="200"/></div>
+        <div style={{...S.card,marginBottom:12}}><span style={S.lbl}>Time Limit (minutes)</span><input type="number" style={S.inp} value={customTime} onChange={e=>setCustomTime(parseInt(e.target.value)||45)} min="5" max="240"/></div>
+        <div style={{marginBottom:12}}><span style={S.lbl}>Subject</span><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{SUBJECTS.map(s=><FBtn key={s} label={s} active={subject===s} color={s==="All"?"#00C9A7":SC[s]} onClick={()=>setSubject(s)}/>)}</div></div>
+        <div style={{marginBottom:20}}><span style={S.lbl}>Difficulty</span><div style={{display:"flex",gap:6}}>{["All",...DIFFS].map(d=><FBtn key={d} label={d} active={difficulty===d} color={d==="All"?"#a8c0ff":DC[d]} onClick={()=>setDiff(d)}/>)}</div></div>
+        <button onClick={()=>startStudy("exam","custom")} style={S.primaryBtn()}>Start Custom Exam →</button>
+      </div>
+    </div>
+  );
+
+  if(screen==="customSetup") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{padding:"22px 0 8px"}}><button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Back</button></div>
+        <div style={{marginBottom:18}}>
+          <span style={S.lbl}>Custom AI Topic</span>
+          <h2 style={{fontSize:"clamp(1.3rem,4vw,1.7rem)",fontWeight:700,color:"#dde6ff"}}>What do you want to study?</h2>
+          <p style={{color:"#4a5a7a",fontSize:13,marginTop:8,lineHeight:1.6}}>Type any topic. AI generates targeted questions in your chosen format.</p>
+        </div>
+        <QTypeSelector/>
+        <div style={{...S.card,marginBottom:14}}>
+          <span style={S.lbl}>Your Topic</span>
+          <textarea style={{...S.inp,height:90,resize:"vertical"}} placeholder="e.g. 'heart failure management', 'beta-lactam antibiotics', 'COPD exacerbation'..." value={customQ} onChange={e=>setCustomQ(e.target.value)}/>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:20}}>
+          {["Easy","Medium","Hard","Mixed"].map(d=><FBtn key={d} label={d} active={difficulty===(d==="Mixed"?"All":d)} color={d==="Mixed"?"#a8c0ff":DC[d]||"#a8c0ff"} onClick={()=>setDiff(d==="Mixed"?"All":d)}/>)}
+        </div>
+        <button onClick={()=>{if(customQ.trim())startStudy("custom","",customQ);}} style={{...S.primaryBtn(),opacity:customQ.trim()?1:0.5}}>Generate Questions →</button>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LAB
+  // ══════════════════════════════════════════════════════════════════════════
+  if(screen==="lab") return (
     <div style={S.page}>
       <div style={S.wrap}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0 8px"}}>
           <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
-          <div style={{display:"flex",gap:14,alignItems:"center"}}>
-            {streak>=2&&<span style={{fontSize:12,color:"#FFC75F",fontFamily:"monospace"}}>🔥{streak}</span>}
-            <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{qIdx+1}/{queue.length}</span>
-            <span style={{fontSize:12,color:"#00C9A7",fontFamily:"monospace"}}>{score}✓</span>
-          </div>
+          <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{labIdx+1}/{ANATOMY_ITEMS.length}</span>
         </div>
-
-        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:24}}>
-          <div style={{height:"100%",width:`${(qIdx/queue.length)*100}%`,background:"linear-gradient(90deg,#00C9A7,#845EC2)",borderRadius:99,transition:"width 0.5s"}}/>
+        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}>
+          <div style={{height:"100%",width:`${((labIdx+1)/ANATOMY_ITEMS.length)*100}%`,background:"linear-gradient(90deg,#FF9F43,#FF6F91)",borderRadius:99}}/>
         </div>
-
-        <div style={{opacity:animIn?1:0,transform:animIn?"translateY(0)":"translateY(14px)",transition:"all 0.28s ease"}}>
-          <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
-            <Pill color={SC[q.subject]}>{q.subject}</Pill>
-            <Pill color={DC[q.difficulty]}>{q.difficulty}</Pill>
-            {q.ai&&<Pill color="#a8c0ff">AI ✦</Pill>}
-          </div>
-
-          <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.8,marginBottom:22,color:"#dde6ff"}}>{q.question}</div>
-
-          <div style={{display:"flex",flexDirection:"column",gap:9}}>
-            {q.options.map((opt,idx)=>{
-              const isSel=picked===idx,isCorr=idx===q.answer;
-              let bg="rgba(255,255,255,0.03)",border="1px solid rgba(255,255,255,0.07)",color="#8a9dc0",icon="";
-              if(picked!==null){
-                if(isCorr){bg="rgba(0,201,167,0.1)";border="1px solid rgba(0,201,167,0.5)";color="#00C9A7";icon="✓ ";}
-                else if(isSel){bg="rgba(255,111,145,0.1)";border="1px solid rgba(255,111,145,0.5)";color="#FF6F91";icon="✗ ";}
-              }
-              return(
-                <button key={idx} onClick={()=>handlePick(idx)} style={{background:bg,border,borderRadius:11,padding:"13px 16px",color,textAlign:"left",cursor:picked!==null?"default":"pointer",fontSize:14,lineHeight:1.5,transition:"all 0.18s"}}>
-                  <span style={{fontFamily:"monospace",marginRight:8,opacity:0.35,fontSize:12}}>{String.fromCharCode(65+idx)}.</span>{icon}{opt}
-                </button>
-              );
-            })}
-          </div>
-
-          {picked!==null&&(
-            <div style={{marginTop:18,...S.card,borderColor:"rgba(168,192,255,0.1)",animation:"fadeUp 0.25s ease"}}>
-              <div style={{fontSize:10,letterSpacing:3,color:picked===q.answer?"#00C9A7":"#FF6F91",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>
-                {picked===q.answer?"✓ Correct":"✗ Incorrect"} — Explanation
-              </div>
-              <p style={{color:"#7a8db0",fontSize:13,lineHeight:1.8,margin:0}}>{q.explanation}</p>
+        {(()=>{
+          const item=ANATOMY_ITEMS[labIdx];
+          return(
+            <div>
+              <div style={{display:"flex",gap:7,marginBottom:12}}><Pill color="#FF9F43">{item.category}</Pill><Pill color={item.level==="boards"?"#FF6F91":item.level==="paschool"?"#FFC75F":"#00C9A7"}>{item.level}</Pill></div>
+              <h3 style={{fontSize:15,color:"#dde6ff",marginBottom:14,lineHeight:1.5}}>{item.question}</h3>
+              <div style={{borderRadius:12,overflow:"hidden",marginBottom:14,border:"1px solid rgba(255,255,255,0.07)"}}><img src={item.image} alt={item.label} style={{width:"100%",display:"block",background:"rgba(255,255,255,0.05)"}} onError={e=>e.target.style.display="none"}/></div>
+              {!labAnswered?(
+                <div>
+                  <span style={S.lbl}>Your Answer</span>
+                  <input style={{...S.inp,marginBottom:10}} placeholder="Type your answer..." value={labInput} onChange={e=>setLabInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setLabAnswered(true)}/>
+                  <button onClick={()=>setLabAnswered(true)} style={S.primaryBtn()}>Reveal Answer →</button>
+                </div>
+              ):(
+                <div style={{animation:"fadeUp 0.25s ease"}}>
+                  <div style={{...S.card,borderColor:"rgba(0,201,167,0.2)",background:"rgba(0,201,167,0.05)",marginBottom:12}}>
+                    <div style={{fontSize:10,letterSpacing:3,color:"#00C9A7",textTransform:"uppercase",marginBottom:6,fontFamily:"monospace"}}>✓ Answer</div>
+                    <div style={{fontSize:16,fontWeight:700,color:"#00C9A7",marginBottom:6}}>{item.answer}</div>
+                    <p style={{fontSize:13,color:"#7a8db0",lineHeight:1.7,margin:0}}>{item.explanation}</p>
+                  </div>
+                  <button onClick={()=>{if(labIdx+1>=ANATOMY_ITEMS.length)setScreen("dashboard");else{setLabIdx(i=>i+1);setLabAnswered(false);setLabInput("");}}} style={{...S.primaryBtn({background:"linear-gradient(135deg,#FF9F43,#e8890a)"})}}>
+                    {labIdx+1>=ANATOMY_ITEMS.length?"Back to Dashboard":"Next Structure →"}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          );
+        })()}
+      </div>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    </div>
+  );
 
-          {picked!==null&&(
-            <button onClick={nextQ} style={{...S.primaryBtn,background:"linear-gradient(135deg,#845EC2,#6a44aa)",boxShadow:"0 4px 20px rgba(132,94,194,0.28)",marginTop:14}}>
-              {qIdx+1>=queue.length?"View Results →":"Next Question →"}
-            </button>
-          )}
+  // ══════════════════════════════════════════════════════════════════════════
+  // FLASHCARDS
+  // ══════════════════════════════════════════════════════════════════════════
+  if(screen==="quiz"&&studyMode==="flashcard") return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0 8px"}}>
+          <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
+          <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{flashIdx+1}/{queue.length}</span>
         </div>
+        <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}>
+          <div style={{height:"100%",width:`${((flashIdx+1)/queue.length)*100}%`,background:"linear-gradient(90deg,#845EC2,#00C9A7)",borderRadius:99}}/>
+        </div>
+        {queue[flashIdx]&&(()=>{
+          const fq=queue[flashIdx];
+          return(
+            <div>
+              <div style={{display:"flex",gap:7,marginBottom:12}}><Pill color={SC[fq.subject]||"#00C9A7"}>{fq.subject}</Pill><Pill color={DC[fq.difficulty]}>{fq.difficulty}</Pill></div>
+              <div onClick={()=>setFlipped(f=>!f)} style={{...S.card,minHeight:180,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",textAlign:"center",borderColor:flashFlipped?"rgba(0,201,167,0.3)":"rgba(255,255,255,0.07)",background:flashFlipped?"rgba(0,201,167,0.05)":"rgba(255,255,255,0.035)",transition:"all 0.3s",marginBottom:14,padding:24}}>
+                {!flashFlipped?(
+                  <div><div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",marginBottom:10,letterSpacing:3}}>TAP TO REVEAL</div><div style={{fontSize:14,lineHeight:1.7,color:"#dde6ff"}}>{fq.question}</div></div>
+                ):(
+                  <div>
+                    <div style={{fontSize:10,color:"#00C9A7",fontFamily:"monospace",marginBottom:8,letterSpacing:3}}>ANSWER</div>
+                    <div style={{fontSize:17,fontWeight:700,color:"#00C9A7",marginBottom:8}}>{fq.answerText||(fq.options&&fq.options[fq.answer])}</div>
+                    <div style={{fontSize:12,color:"#7a8db0",lineHeight:1.6}}>{fq.explanation}</div>
+                  </div>
+                )}
+              </div>
+              {flashFlipped&&(
+                <div style={{display:"flex",gap:10}}>
+                  <button onClick={()=>{setLearnBank(l=>{const e=l.find(x=>x.id===fq.id);return e?l:[...l,fq];});setFlipped(false);if(flashIdx+1>=queue.length)setScreen("dashboard");else setFlashIdx(i=>i+1);}} style={{flex:1,padding:"12px",borderRadius:11,border:"none",cursor:"pointer",background:"rgba(255,111,145,0.15)",color:"#FF6F91",fontSize:13,fontWeight:700}}>✗ Still Learning</button>
+                  <button onClick={()=>{setMastered(m=>{const e=m.find(x=>x.id===fq.id);return e?m:[...m,fq];});setLearnBank(l=>l.filter(x=>x.id!==fq.id));setFlipped(false);if(flashIdx+1>=queue.length)setScreen("dashboard");else setFlashIdx(i=>i+1);}} style={{flex:1,padding:"12px",borderRadius:11,border:"none",cursor:"pointer",background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontSize:13,fontWeight:700}}>✓ Got It</button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
 
-  // ── RESULTS ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // QUIZ — ALL QUESTION TYPES
+  // ══════════════════════════════════════════════════════════════════════════
+  if(screen==="quiz"&&q) return (
+    <div style={S.page}>
+      <div style={S.wrap}>
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 0 6px"}}>
+          <button onClick={()=>setScreen("dashboard")} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:13,padding:0}}>← Exit</button>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            {studyMode==="strikes"&&<div style={{display:"flex",gap:2}}>{[0,1,2,3,4].map(i=><span key={i} style={{fontSize:13,opacity:i<strikes?1:0.2}}>{i<strikes?"💀":"❤️"}</span>)}</div>}
+            {studyMode==="exam"&&timeLeft!==null&&<span style={{fontSize:13,color:timeLeft<300?"#FF6F91":"#FFC75F",fontFamily:"monospace",fontWeight:700}}>{formatTime(timeLeft)}</span>}
+            {streak>=2&&<span style={{fontSize:12,color:"#FFC75F",fontFamily:"monospace"}}>🔥{streak}</span>}
+            <span style={{fontSize:13,color:"#4a5a7a",fontFamily:"monospace"}}>{qIdx+1}{queue.length<500?"/"+queue.length:""}</span>
+            <span style={{fontSize:12,color:"#00C9A7",fontFamily:"monospace"}}>{score}✓</span>
+          </div>
+        </div>
+
+        {queue.length<500&&(
+          <div style={{height:2,background:"rgba(255,255,255,0.05)",borderRadius:99,marginBottom:18}}>
+            <div style={{height:"100%",width:`${(qIdx/queue.length)*100}%`,background:"linear-gradient(90deg,#00C9A7,#845EC2)",borderRadius:99,transition:"width 0.5s"}}/>
+          </div>
+        )}
+
+        <div style={{opacity:animIn?1:0,transform:animIn?"translateY(0)":"translateY(14px)",transition:"all 0.28s ease",animation:shaking?"shake 0.3s ease":""}}>
+          {/* Badges */}
+          <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
+            <Pill color={SC[q.subject]||"#00C9A7"}>{q.subject}</Pill>
+            <Pill color={DC[q.difficulty]}>{q.difficulty}</Pill>
+            <QTypeBadge type={q.type||"mc"}/>
+            {q.ai&&<Pill color="#a8c0ff">AI ✦</Pill>}
+            {deepDiveTopic&&<Pill color="#845EC2">Deep Dive</Pill>}
+          </div>
+
+          {/* ── MULTIPLE CHOICE ── */}
+          {(q.type==="mc"||!q.type)&&(
+            <div>
+              <div style={{fontSize:"clamp(0.95rem,3vw,1.1rem)",lineHeight:1.8,marginBottom:18,color:"#dde6ff"}}>{q.question}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {q.options.map((opt,idx)=>{
+                  const isSel=picked===idx,isCorr=idx===q.answer;
+                  let bg="rgba(255,255,255,0.03)",border="1px solid rgba(255,255,255,0.07)",color="#8a9dc0",icon="";
+                  if(revealed){if(isCorr){bg="rgba(0,201,167,0.1)";border="1px solid rgba(0,201,167,0.5)";color="#00C9A7";icon="✓ ";}else if(isSel){bg="rgba(255,111,145,0.1)";border="1px solid rgba(255,111,145,0.5)";color="#FF6F91";icon="✗ ";}}
+                  return(
+                    <button key={idx} onClick={()=>handlePickMC(idx)} style={{background:bg,border,borderRadius:11,padding:"13px 15px",color,textAlign:"left",cursor:revealed?"default":"pointer",fontSize:14,lineHeight:1.5,transition:"all 0.18s"}}>
+                      <span style={{fontFamily:"monospace",marginRight:8,opacity:0.35,fontSize:11}}>{String.fromCharCode(65+idx)}.</span>{icon}{opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── FILL IN THE BLANK ── */}
+          {q.type==="fitb"&&(
+            <FITBQuestion
+              question={q.question}
+              revealed={revealed}
+              userAnswer={fitbAnswer}
+              onReveal={handleFITB}
+            />
+          )}
+
+          {/* ── FREE RESPONSE ── */}
+          {q.type==="free"&&(
+            <FreeResponseQuestion
+              question={q.question}
+              onSubmit={handleFreeSubmit}
+              revealed={revealed}
+              aiGrade={aiGrade}
+              loading={gradingLoading}
+            />
+          )}
+
+          {/* ── EXPLANATION (shown after answer) ── */}
+          {revealed&&!gradingLoading&&(
+            <div style={{marginTop:16,animation:"fadeUp 0.25s ease"}}>
+
+              {/* AI Grade for free response */}
+              {q.type==="free"&&aiGrade&&(
+                <div style={{...S.card,marginBottom:12,
+                  borderColor:aiGrade.correct===true?"rgba(0,201,167,0.3)":aiGrade.correct===false?"rgba(255,111,145,0.3)":"rgba(255,199,95,0.3)",
+                  background:aiGrade.correct===true?"rgba(0,201,167,0.05)":aiGrade.correct===false?"rgba(255,111,145,0.05)":"rgba(255,199,95,0.05)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{fontSize:10,letterSpacing:3,color:aiGrade.correct===true?"#00C9A7":aiGrade.correct===false?"#FF6F91":"#FFC75F",textTransform:"uppercase",fontFamily:"monospace"}}>
+                      AI Grade
+                    </div>
+                    {aiGrade.score!==null&&(
+                      <div style={{fontSize:22,fontWeight:700,color:aiGrade.correct===true?"#00C9A7":aiGrade.correct===false?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>
+                        {aiGrade.score}% {aiGrade.grade&&`· ${aiGrade.grade}`}
+                      </div>
+                    )}
+                  </div>
+                  {aiGrade.feedback&&<p style={{fontSize:13,color:"#c0ccee",lineHeight:1.7,margin:"0 0 8px"}}>{aiGrade.feedback}</p>}
+                  {aiGrade.strengths&&aiGrade.strengths.length>0&&(
+                    <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:"#00C9A7",fontFamily:"monospace",letterSpacing:2,marginBottom:5}}>STRENGTHS</div>
+                      {aiGrade.strengths.map((s,i)=><div key={i} style={{fontSize:12,color:"#5a7a5a",marginBottom:3}}>✓ {s}</div>)}
+                    </div>
+                  )}
+                  {aiGrade.missedPoints&&aiGrade.missedPoints.length>0&&(
+                    <div>
+                      <div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:5}}>MISSED POINTS</div>
+                      {aiGrade.missedPoints.map((s,i)=><div key={i} style={{fontSize:12,color:"#7a5a5a",marginBottom:3}}>• {s}</div>)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* FITB result */}
+              {q.type==="fitb"&&(
+                <div style={{...S.card,marginBottom:12,borderColor:fitbCorrect?"rgba(0,201,167,0.3)":"rgba(255,111,145,0.3)",background:fitbCorrect?"rgba(0,201,167,0.05)":"rgba(255,111,145,0.05)"}}>
+                  <div style={{fontSize:10,letterSpacing:3,color:fitbCorrect?"#00C9A7":"#FF6F91",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>
+                    {fitbCorrect?"✓ Correct!":"✗ Incorrect"}
+                  </div>
+                  <div style={{fontSize:14,marginBottom:6}}>
+                    <span style={{color:"#6a7a9a",fontSize:12}}>Correct answer: </span>
+                    <span style={{color:"#00C9A7",fontWeight:700}}>{q.answerText}</span>
+                  </div>
+                  {fitbAnswer&&!fitbCorrect&&<div style={{fontSize:12,color:"#6a7a9a",marginBottom:8}}>Your answer: <span style={{color:"#FF6F91"}}>{fitbAnswer}</span></div>}
+                </div>
+              )}
+
+              {/* Model answer / explanation */}
+              <div style={{...S.card,borderColor:"rgba(168,192,255,0.1)",marginBottom:12}}>
+                <div style={{fontSize:10,letterSpacing:3,color:"#a8c0ff",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>
+                  {q.type==="free"?"Model Answer":"Explanation"}
+                </div>
+                <p style={{color:"#c0ccee",fontSize:14,lineHeight:1.8,margin:0}}>{q.explanation}</p>
+                {q.keyPoints&&q.keyPoints.length>0&&(
+                  <div style={{marginTop:12,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:10}}>
+                    <div style={{fontSize:10,color:"#4a5a7a",fontFamily:"monospace",letterSpacing:2,marginBottom:8}}>KEY POINTS</div>
+                    {q.keyPoints.map((kp,i)=>(
+                      <div key={i} style={{display:"flex",gap:8,marginBottom:5}}>
+                        <span style={{color:"#00C9A7",fontSize:12,flexShrink:0}}>•</span>
+                        <span style={{fontSize:12,color:"#6a7a9a",lineHeight:1.6}}>{kp}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* MC wrong explanations */}
+                {(q.type==="mc"||!q.type)&&picked!==q.answer&&q.wrongExplanations&&q.wrongExplanations[picked]&&(
+                  <div style={{marginTop:10,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:10}}>
+                    <div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:6}}>WHY YOUR ANSWER WAS WRONG</div>
+                    <p style={{color:"#7a8db0",fontSize:13,lineHeight:1.7,margin:0}}>{q.wrongExplanations[picked]}</p>
+                  </div>
+                )}
+              </div>
+
+              {studyMode==="strikes"&&strikes>=5
+                ?<button onClick={endSession} style={S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)"})}>Game Over — See Results</button>
+                :<button onClick={nextQ} style={S.primaryBtn({background:"linear-gradient(135deg,#845EC2,#6a44aa)",boxShadow:"0 4px 20px rgba(132,94,194,0.28)"})}>
+                  {qIdx+1>=queue.length?"View Results →":"Next Question →"}
+                </button>
+              }
+            </div>
+          )}
+
+          {/* Loading indicator for free response grading */}
+          {gradingLoading&&(
+            <div style={{marginTop:16,textAlign:"center"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",border:"3px solid rgba(255,111,145,0.15)",borderTopColor:"#FF6F91",animation:"spin 0.8s linear infinite",margin:"0 auto 8px"}}/>
+              <div style={{fontSize:12,color:"#4a5a7a",fontFamily:"monospace"}}>AI grading your response…</div>
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RESULTS
+  // ══════════════════════════════════════════════════════════════════════════
   if(screen==="results") return (
     <div style={S.page}>
       <div style={S.wrap}>
-        <div style={{textAlign:"center",padding:"48px 0 28px"}}>
-          <div style={{fontSize:52,marginBottom:10}}>{pct>=80?"🏆":pct>=60?"📈":"📚"}</div>
-          <span style={S.label}>Session Complete</span>
-          <div style={{fontSize:"clamp(3.5rem,12vw,5.5rem)",fontWeight:700,lineHeight:1,
+        <div style={{textAlign:"center",padding:"40px 0 24px"}}>
+          <div style={{fontSize:48,marginBottom:8}}>{pct>=80?"🏆":pct>=60?"📈":"📚"}</div>
+          <span style={S.lbl}>Session Complete</span>
+          <div style={{fontSize:"clamp(3rem,10vw,5rem)",fontWeight:700,lineHeight:1,
             background:pct>=80?"linear-gradient(135deg,#00C9A7,#00ffd5)":pct>=60?"linear-gradient(135deg,#FFC75F,#ffe0a0)":"linear-gradient(135deg,#FF6F91,#ffb0c0)",
             WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{pct}%</div>
-          <div style={{color:"#4a5a7a",fontSize:14,marginTop:6}}>{score}/{queue.length} correct</div>
-          {bestStreak>=3&&<div style={{color:"#FFC75F",fontSize:12,marginTop:6,fontFamily:"monospace"}}>🔥 Best streak: {bestStreak}</div>}
-          <div style={{color:"#2a3a5a",fontSize:11,marginTop:4,fontFamily:"monospace"}}>{prog.sessions} sessions · {prog.totalAnswered} total questions</div>
+          <div style={{color:"#4a5a7a",fontSize:14,marginTop:5}}>{score}/{Math.min(queue.length,qIdx+1)} correct</div>
+          {bestStreak>=3&&<div style={{color:"#FFC75F",fontSize:12,marginTop:4,fontFamily:"monospace"}}>🔥 Best streak: {bestStreak}</div>}
+          <div style={{display:"flex",justifyContent:"center",gap:14,marginTop:10}}>
+            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:"#00C9A7",fontFamily:"monospace"}}>{mastered.length}</div><div style={{fontSize:10,color:"#4a5a7a"}}>Mastered</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:"#FF6F91",fontFamily:"monospace"}}>{learnBank.length}</div><div style={{fontSize:10,color:"#4a5a7a"}}>To Learn</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:"#FFC75F",fontFamily:"monospace"}}>{prog.highScore||pct}%</div><div style={{fontSize:10,color:"#4a5a7a"}}>Best Score</div></div>
+          </div>
         </div>
 
-        {Object.keys(stats).length>0&&(
-          <div style={{...S.card,marginBottom:20}}>
-            <span style={S.label}>This Session</span>
-            {Object.entries(stats).map(([s,{correct,total}])=>(
-              <div key={s} style={{marginBottom:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+        {Object.keys(sessionStats).length>0&&(
+          <div style={{...S.card,marginBottom:14}}>
+            <span style={S.lbl}>This Session</span>
+            {Object.entries(sessionStats).map(([s,{correct,total}])=>(
+              <div key={s} style={{marginBottom:11}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{fontSize:12,color:"#6a7a9a"}}>{s}</span>
-                  <span style={{fontSize:12,color:SC[s],fontFamily:"monospace"}}>{correct}/{total}</span>
+                  <span style={{fontSize:12,color:SC[s]||"#00C9A7",fontFamily:"monospace"}}>{correct}/{total}</span>
                 </div>
-                <PBar value={correct} max={total} color={SC[s]}/>
+                <PBar value={correct} max={total} color={SC[s]||"#00C9A7"}/>
               </div>
             ))}
           </div>
         )}
 
-        <div style={{display:"flex",gap:10,marginBottom:16}}>
-          <button onClick={startQuiz} style={{...S.primaryBtn,flex:1}}>Try Again</button>
+        {learnBank.length>0&&(
+          <div style={{...S.card,marginBottom:14,borderColor:"rgba(255,111,145,0.2)"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#FF6F91",marginBottom:3}}>📖 {learnBank.length} in Learn folder</div>
+            <div style={{fontSize:12,color:"#4a5a7a",marginBottom:10}}>Review these until you master them</div>
+            <button onClick={()=>startStudy("learn")} style={S.primaryBtn({background:"linear-gradient(135deg,#FF6F91,#cc4466)",padding:"12px"})}>Review Missed Questions →</button>
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10,marginBottom:14}}>
+          <button onClick={()=>startStudy(studyMode,examType,customTopic,deepDiveTopic)} style={S.primaryBtn({flex:1})}>Try Again</button>
           <button onClick={()=>setScreen("dashboard")} style={{...S.ghostBtn,flex:1}}>Dashboard</button>
         </div>
 
         {!isPro&&(
-          <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:24}}>
-            <div style={{fontSize:14,color:"#00C9A7",marginBottom:4,fontWeight:700}}>💡 Unlock unlimited questions</div>
-            <div style={{fontSize:12,color:"#4a5a7a",lineHeight:1.7,marginBottom:14}}>PA Prep Pro · $14.99/mo or $99/yr</div>
-            <button onClick={()=>setScreen("paywall")} style={{padding:"12px 28px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>
-              Upgrade to Pro →
-            </button>
+          <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:18}}>
+            <div style={{fontSize:13,color:"#00C9A7",marginBottom:3,fontWeight:700}}>💡 Unlock everything</div>
+            <div style={{fontSize:12,color:"#4a5a7a",marginBottom:12}}>PA Prep Pro · $14.99/mo or $99/yr</div>
+            <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
           </div>
         )}
       </div>
+      <style>{`*{box-sizing:border-box}`}</style>
     </div>
   );
 
