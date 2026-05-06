@@ -27,10 +27,21 @@ input,button,select,textarea{font-family:inherit}
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const CONFIG = {
+  ANTHROPIC_KEY: "YOUR_ANTHROPIC_API_KEY_HERE",
+  STRIPE: {
+    basic:  "https://buy.stripe.com/8x228reDZeUY7zS61B4ZG02",
+    pro:    "https://buy.stripe.com/5kQ14n0N9aEI3jCey74ZG05",
+    annual: "https://buy.stripe.com/28E6oHbrNcMQ3jC0Hh4ZG04",
+  },
+  TIERS: {
+    free:   {label:"Free",   dailyLimit:10,  color:"#6a7a9a", unlimited:false},
+    basic:  {label:"Basic",  dailyLimit:75,  color:"#00C9A7", unlimited:false},
+    pro:    {label:"Pro",    dailyLimit:200, color:"#845EC2", unlimited:false},
+    annual: {label:"Annual", dailyLimit:300, color:"#FFC75F", unlimited:true},
+  },
   MONTHLY_LINK: "https://buy.stripe.com/5kQ14n0N9aEI3jCey74ZG05",
   YEARLY_LINK:  "https://buy.stripe.com/28E6oHbrNcMQ3jC0Hh4ZG04",
   FREE_LIMIT: 10,
-  ANTHROPIC_KEY: "YOUR_ANTHROPIC_API_KEY_HERE",
 };
 
 // ─── LEVELS ───────────────────────────────────────────────────────────────────
@@ -151,6 +162,22 @@ const ANATOMY_ITEMS = [
   {id:3,level:"paschool",category:"Anatomy & Physiology",label:"Nephron",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Kidney_nephron_molar_transport_diagram.svg/400px-Kidney_nephron_molar_transport_diagram.svg.png",question:"Which segment of the nephron is primarily responsible for sodium reabsorption?",answer:"Proximal Convoluted Tubule (PCT)",explanation:"The PCT reabsorbs ~67% of filtered sodium via Na/K-ATPase on the basolateral membrane."},
   {id:4,level:"boards",category:"Anatomy & Physiology",label:"ECG Waves",image:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/SinusRhythmLabels.svg/400px-SinusRhythmLabels.svg.png",question:"What cardiac event does the QRS complex represent?",answer:"Ventricular depolarization",explanation:"The QRS complex represents ventricular depolarization. Width reflects conduction time (normal <120ms)."},
 ];
+
+// ─── DAILY LIMIT HELPERS ──────────────────────────────────────────────────────
+const todayKey = () => new Date().toDateString();
+const getDailyUsed = () => {
+  try {
+    const d = JSON.parse(localStorage.getItem("paprep_daily")||"null") || {date:"",count:0};
+    return d.date === todayKey() ? d.count : 0;
+  } catch { return 0; }
+};
+const addDailyUsed = (n=1) => {
+  const today = todayKey();
+  const d = JSON.parse(localStorage.getItem("paprep_daily")||"null") || {date:today,count:0};
+  const c = d.date === today ? d.count + n : n;
+  localStorage.setItem("paprep_daily", JSON.stringify({date:today,count:c}));
+};
+const getUserTier = (u) => u?.tier || (u?.pro ? "pro" : "free");
 
 const store = {
   get:(k,fb=null)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}},
@@ -404,19 +431,29 @@ function App() {
   const [learnCards,setLearnCards]     = React.useState([]);
   const [learnCardIdx,setLearnCardIdx] = React.useState(0);
   const [learnCardFlipped,setLearnCardFlipped] = React.useState(false);
-  const [learnPhase,setLearnPhase]     = React.useState("content"); // content | quiz | tutor
+  const [learnPhase,setLearnPhase]     = React.useState("content");
   const [tutorHistory,setTutorHistory] = React.useState([]);
   const [tutorInput,setTutorInput]     = React.useState("");
   const [tutorLoading,setTutorLoading] = React.useState(false);
   const [bgFill,setBgFill]             = React.useState(false);
 
+  // ── 4-TIER PRICING STATE ────────────────────────────────────────────────
+  const [dailyUsed, setDailyUsed]      = React.useState(()=>getDailyUsed());
+
   const q = queue[qIdx];
-  const isPro = user?.pro||false;
-  const hitLimit = !isPro && prog.totalAnswered >= CONFIG.FREE_LIMIT;
+  const tier = getUserTier(user);
+  const tierCfg = CONFIG.TIERS[tier] || CONFIG.TIERS.free;
+  const isPaid = tier !== "free";
+  const isPro = isPaid; // legacy compat
+  const unlimited = tierCfg.unlimited;
+  const dailyLimit = tierCfg.dailyLimit;
+  const hitFreeLimit = tier === "free" && prog.totalAnswered >= CONFIG.FREE_LIMIT;
+  const hitDailyLimit = !unlimited && isPaid && dailyUsed >= dailyLimit;
+  const hitLimit = hitFreeLimit || hitDailyLimit;
   const overallPct = prog.totalAnswered ? Math.round((prog.totalCorrect/prog.totalAnswered)*100):0;
   const pct = queue.length ? Math.round((score/queue.length)*100):0;
 
-  // Adaptive level: get current difficulty based on performance
+  // Adaptive level
   const getAdaptiveDifficulty = (topic) => {
     const perfKey = topic || subject;
     const perf = prog.adaptiveLevel?.[perfKey];
@@ -433,7 +470,6 @@ function App() {
   React.useEffect(()=>{store.set("paprep_learn",learnBank);},[learnBank]);
   React.useEffect(()=>{if(userProfile)store.set("paprep_profile",userProfile);},[userProfile]);
 
-  // Exam timer
   React.useEffect(()=>{
     if(screen!=="quiz"||studyMode!=="exam"||!examStarted||timeLeft===null)return;
     if(timeLeft<=0){endSession();return;}
@@ -441,7 +477,6 @@ function App() {
     return()=>clearTimeout(t);
   },[screen,studyMode,examStarted,timeLeft]);
 
-  // BG fill
   React.useEffect(()=>{
     if(bank.length<80&&!bgFill&&CONFIG.ANTHROPIC_KEY!=="YOUR_ANTHROPIC_API_KEY_HERE"){
       setBgFill(true);
@@ -454,23 +489,21 @@ function App() {
   const handleAuth=()=>{
     if(!form.email||!form.password){setFormErr("Please fill in all fields.");return;}
     if(authMode==="signup"&&!form.name){setFormErr("Please enter your name.");return;}
-    const u={name:form.name||form.email.split("@")[0],email:form.email,pro:false};
+    const u={name:form.name||form.email.split("@")[0],email:form.email,pro:false,tier:"free"};
     setUser(u);setFormErr("");
-    // If no profile yet, go to onboarding
     if(!store.get("paprep_profile")){setScreen("onboarding");}
     else{setScreen("dashboard");}
   };
   const logout=()=>{store.set("paprep_user",null);setUser(null);setScreen("landing");};
-  const activatePro=()=>{const u={...user,pro:true};setUser(u);store.set("paprep_user",u);};
+  const activatePro=()=>{const u={...user,pro:true,tier:"pro"};setUser(u);store.set("paprep_user",u);};
+  const activateTier=(t)=>{const u={...user,tier:t,pro:t!=="free"};setUser(u);store.set("paprep_user",u);};
 
-  // Save onboarding profile
   const saveProfile=(profile)=>{
     setUserProfile(profile);
     setCurrentLevel(profile.level);
     setScreen("dashboard");
   };
 
-  // Build question queue
   const buildQueue=async(mode,eType,cTopic,ddTopic,count=15)=>{
     const adaptDiff = getAdaptiveDifficulty(ddTopic||cTopic||subject);
     let pool=[];
@@ -496,6 +529,7 @@ function App() {
       });
       const withIds=ai.map((q,i)=>({...q,id:Date.now()+i}));
       setBank(b=>[...b,...withIds]);
+      addDailyUsed(withIds.length); setDailyUsed(getDailyUsed());
       selected=[...selected,...withIds].slice(0,mode==="strikes"?999:finalCount);
     }
     return selected;
@@ -517,7 +551,6 @@ function App() {
     finally{setLoading(false);setLoadMsg("");}
   };
 
-  // Start Learn mode
   const startLearn=async(topic, method)=>{
     if(hitLimit){setScreen("paywall");return;}
     setLearnMethod(method);setLearnContent(null);setLearnCards([]);setLearnCardIdx(0);
@@ -541,7 +574,6 @@ function App() {
     finally{setLoading(false);setLoadMsg("");}
   };
 
-  // Handle tutor chat
   const sendTutorMessage=async()=>{
     if(!tutorInput.trim()||tutorLoading)return;
     const msg=tutorInput.trim();setTutorInput("");
@@ -554,7 +586,6 @@ function App() {
     finally{setTutorLoading(false);}
   };
 
-  // Answer handlers
   const handlePickMC=(idx)=>{
     if(picked!==null||!q)return;
     setPicked(idx);setRevealed(true);
@@ -584,7 +615,6 @@ function App() {
       if(ok){setMastered(m=>{const e=m.find(x=>x.id===q.id);return e?m:[...m,q];});setLearnBank(l=>l.filter(x=>x.id!==q.id));}
       else if(ok===false){setLearnBank(l=>{const e=l.find(x=>x.id===q.id);return e?l:[...l,q];});}
     }
-    // Adaptive tracking
     if(q){
       const key=deepDiveTopic||subject;
       setProg(p=>{
@@ -616,7 +646,6 @@ function App() {
   };
   const formatTime=(s)=>`${Math.floor(s/60)}:${(s%60).toString().padStart(2,"0")}`;
 
-  // Q Type Selector
   const QTypeSelector=()=>(
     <div style={{marginBottom:18}}>
       <span style={S.lbl}>Question Type</span>
@@ -633,7 +662,6 @@ function App() {
     </div>
   );
 
-  // Level Selector
   const LevelSelector=({selected,onSelect})=>(
     <div style={{marginBottom:18}}>
       <span style={S.lbl}>Your Level</span>
@@ -650,7 +678,6 @@ function App() {
     </div>
   );
 
-  // FITB renderer
   const FITBRenderer=({q,revealed,fitbAnswer,onReveal})=>{
     const [input,setInput]=React.useState("");
     const parts=q.question.split("___");
@@ -727,23 +754,45 @@ function App() {
           </div>
         </div>
 
+        {/* ── 4-TIER PRICING ── */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
           <div style={S.card}>
-            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:6,fontFamily:"monospace"}}>FREE</div>
-            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$0</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>forever</div>
-            {["10 questions","All question types","Learn mode preview"].map(f=>(
-              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:5,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
+            <div style={{fontSize:11,color:"#6a7a9a",marginBottom:6,fontFamily:"monospace"}}>FREE</div>
+            <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$0</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>10 questions total</div>
+            {["All question types","Full explanations","Learn mode preview"].map(f=>(
+              <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
           </div>
-          <div style={{...S.card,border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.04)",position:"relative"}}>
-            <div style={{position:"absolute",top:-11,right:12,fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700}}>POPULAR</div>
-            <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
-            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · or $99/yr</div>
-            {["Unlimited AI questions","All 4 learn formats","AI tutor — chat to learn","Adaptive difficulty","Deep Dive all 49 subtopics","AI grading for free response"].map(f=>(
-              <div key={f} style={{fontSize:12,color:"#5a6d94",marginBottom:5,display:"flex",gap:8}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
+          <div style={{...S.card,borderColor:"rgba(0,201,167,0.25)"}}>
+            <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>BASIC</div>
+            <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$9.99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>/mo · 75 q/day</div>
+            {["75 questions per day","All study modes","Deep Dive modules","Learn mode access"].map(f=>(
+              <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
+            <a href={CONFIG.STRIPE.basic} target="_blank" rel="noreferrer" onClick={()=>activateTier("basic")} style={{display:"block",marginTop:10,padding:"8px",borderRadius:8,background:"rgba(0,201,167,0.1)",border:"1px solid rgba(0,201,167,0.3)",color:"#00C9A7",fontSize:12,textDecoration:"none",textAlign:"center",fontWeight:700}}>Get Basic →</a>
+          </div>
+          <div style={{...S.card,border:"1px solid rgba(132,94,194,0.3)",background:"rgba(132,94,194,0.04)",position:"relative"}}>
+            <div style={{position:"absolute",top:-11,right:12,fontSize:10,background:"#845EC2",color:"#fff",padding:"3px 10px",borderRadius:99,fontWeight:700}}>POPULAR</div>
+            <div style={{fontSize:11,color:"#845EC2",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
+            <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$19.99</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>/mo · 200 q/day</div>
+            {["200 questions per day","AI Tutor","AI grading","Adaptive difficulty","Board-style exams"].map(f=>(
+              <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#845EC2"}}>✓</span>{f}</div>
+            ))}
+            <a href={CONFIG.STRIPE.pro} target="_blank" rel="noreferrer" onClick={()=>activateTier("pro")} style={{display:"block",marginTop:10,padding:"8px",borderRadius:8,background:"linear-gradient(135deg,#845EC2,#6a44aa)",color:"#fff",fontSize:12,textDecoration:"none",textAlign:"center",fontWeight:700}}>Get Pro →</a>
+          </div>
+          <div style={{...S.card,border:"1px solid rgba(255,199,95,0.3)",background:"rgba(255,199,95,0.04)",position:"relative"}}>
+            <div style={{position:"absolute",top:-11,right:12,fontSize:10,background:"#FFC75F",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700}}>UNLIMITED</div>
+            <div style={{fontSize:11,color:"#FFC75F",marginBottom:6,fontFamily:"monospace"}}>ANNUAL</div>
+            <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$149.99</div>
+            <div style={{fontSize:11,color:"#FFC75F",marginBottom:2}}>/yr · $12.50/mo</div>
+            <div style={{fontSize:10,color:"#3a4a6a",marginBottom:10}}>Save $90 vs monthly</div>
+            {["Unlimited questions","Everything in Pro","Best for boards"].map(f=>(
+              <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#FFC75F"}}>✓</span>{f}</div>
+            ))}
+            <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"block",marginTop:10,padding:"8px",borderRadius:8,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:12,textDecoration:"none",textAlign:"center",fontWeight:700}}>Get Annual →</a>
           </div>
         </div>
 
@@ -816,13 +865,10 @@ function App() {
               {obStep===0?"This helps us calibrate question difficulty and content":obStep===1?"We'll match the content depth to your stage":"AI will adapt difficulty as you improve"}
             </p>
           </div>
-
-          {/* Progress dots */}
           <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:24}}>
             {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i<=obStep?"#00C9A7":"rgba(255,255,255,0.1)",transition:"all 0.3s"}}/>)}
           </div>
 
-          {/* Step 0 — Degree */}
           {obStep===0&&(
             <div>
               <span style={S.lbl}>Your Degree / Background</span>
@@ -840,7 +886,6 @@ function App() {
             </div>
           )}
 
-          {/* Step 1 — Level */}
           {obStep===1&&(
             <div>
               <LevelSelector selected={obLevel} onSelect={setObLevel}/>
@@ -848,7 +893,6 @@ function App() {
             </div>
           )}
 
-          {/* Step 2 — Knowledge */}
           {obStep===2&&(
             <div>
               <span style={S.lbl}>Knowledge Level in PA School Subjects</span>
@@ -865,7 +909,6 @@ function App() {
               </div>
               <button onClick={()=>{
                 if(!obKnowledge)return;
-                // Set initial difficulty based on knowledge level
                 const diffMap={beginner:"Easy",intermediate:"Medium",advanced:"Medium",expert:"Hard"};
                 setDiff(diffMap[obKnowledge]||"Medium");
                 saveProfile({degree:obDegree,level:obLevel,knowledge:obKnowledge,completedAt:Date.now()});
@@ -882,29 +925,43 @@ function App() {
   if(loading) return <Spinner msg={loadMsg}/>;
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PAYWALL
+  // PAYWALL — TIER-AWARE
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="paywall") return (
     <div style={S.page}>
-      <div style={{...S.wrap,maxWidth:480}}>
-        <div style={{textAlign:"center",padding:"48px 0 24px"}}>
-          <div style={{fontSize:48,marginBottom:14}}>🔒</div>
-          <h2 style={{fontSize:22,fontWeight:700,color:"#dde6ff",margin:"0 0 10px"}}>You've used your {CONFIG.FREE_LIMIT} free questions</h2>
-          <p style={{color:"#4a5a7a",fontSize:14,lineHeight:1.8,margin:"0 auto 24px",maxWidth:340}}>Upgrade for unlimited AI questions, all Learn formats, AI tutor, adaptive difficulty, and Deep Dive modules.</p>
+      <div style={{...S.wrap,maxWidth:520}}>
+        <div style={{textAlign:"center",padding:"44px 0 20px"}}>
+          <div style={{fontSize:44,marginBottom:12}}>🔒</div>
+          <h2 style={{fontSize:20,fontWeight:700,color:"#dde6ff",margin:"0 0 8px"}}>
+            {hitFreeLimit?"You've used your 10 free questions":hitDailyLimit?`Daily limit reached (${dailyLimit} questions)`:"Upgrade to continue"}
+          </h2>
+          <p style={{color:"#4a5a7a",fontSize:13,lineHeight:1.7,margin:"0 auto 20px",maxWidth:360}}>
+            {tier==="basic"?"Upgrade to Pro for 200 q/day + AI Tutor, or Annual for unlimited.":tier==="pro"?"Go Annual for unlimited questions at $12.50/month.":"Choose a plan to unlock full access."}
+          </p>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-          <div style={{...S.card,padding:22,textAlign:"center"}}>
-            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:6,fontFamily:"monospace"}}>MONTHLY</div>
-            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$14.99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:16}}>/month</div>
-            <a href={CONFIG.MONTHLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro} style={{display:"block",padding:"11px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#dde6ff",fontSize:13,textDecoration:"none",textAlign:"center"}}>Get Monthly →</a>
-          </div>
-          <div style={{...S.card,padding:22,textAlign:"center",border:"1px solid rgba(0,201,167,0.3)",background:"rgba(0,201,167,0.05)",position:"relative"}}>
-            <div style={{position:"absolute",top:-11,left:"50%",transform:"translateX(-50%)",fontSize:10,background:"#00C9A7",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700,whiteSpace:"nowrap"}}>BEST VALUE</div>
-            <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>YEARLY</div>
-            <div style={{fontSize:26,fontWeight:700,color:"#dde6ff"}}>$99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:16}}>/year · save 45%</div>
-            <a href={CONFIG.YEARLY_LINK} target="_blank" rel="noreferrer" onClick={activatePro} style={{display:"block",padding:"11px",borderRadius:10,background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",textAlign:"center"}}>Get Yearly →</a>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          {tier==="free"&&(
+            <div style={{...S.card,padding:18,textAlign:"center",borderColor:"rgba(0,201,167,0.25)"}}>
+              <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>BASIC</div>
+              <div style={{fontSize:22,fontWeight:700,color:"#dde6ff"}}>$9.99</div>
+              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · 75 q/day</div>
+              <a href={CONFIG.STRIPE.basic} target="_blank" rel="noreferrer" onClick={()=>activateTier("basic")} style={{display:"block",padding:"10px",borderRadius:9,background:"rgba(0,201,167,0.1)",border:"1px solid rgba(0,201,167,0.3)",color:"#00C9A7",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Basic →</a>
+            </div>
+          )}
+          {tier!=="pro"&&tier!=="annual"&&(
+            <div style={{...S.card,padding:18,textAlign:"center",border:"1px solid rgba(132,94,194,0.3)",background:"rgba(132,94,194,0.05)"}}>
+              <div style={{fontSize:11,color:"#845EC2",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
+              <div style={{fontSize:22,fontWeight:700,color:"#dde6ff"}}>$19.99</div>
+              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · 200 q/day</div>
+              <a href={CONFIG.STRIPE.pro} target="_blank" rel="noreferrer" onClick={()=>activateTier("pro")} style={{display:"block",padding:"10px",borderRadius:9,background:"linear-gradient(135deg,#845EC2,#6a44aa)",color:"#fff",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Pro →</a>
+            </div>
+          )}
+          <div style={{...S.card,padding:18,textAlign:"center",border:"1px solid rgba(255,199,95,0.3)",background:"rgba(255,199,95,0.05)",position:"relative",gridColumn:tier==="pro"?"1/-1":"auto"}}>
+            <div style={{position:"absolute",top:-11,left:"50%",transform:"translateX(-50%)",fontSize:10,background:"#FFC75F",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700,whiteSpace:"nowrap"}}>BEST VALUE · UNLIMITED</div>
+            <div style={{fontSize:11,color:"#FFC75F",marginBottom:6,fontFamily:"monospace"}}>ANNUAL</div>
+            <div style={{fontSize:22,fontWeight:700,color:"#dde6ff"}}>$149.99</div>
+            <div style={{fontSize:11,color:"#FFC75F",marginBottom:12}}>/yr · $12.50/mo · Unlimited</div>
+            <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"block",padding:"10px",borderRadius:9,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Annual — Unlimited →</a>
           </div>
         </div>
         <div style={{fontSize:11,color:"#2a3a5a",textAlign:"center",marginBottom:14}}>Secure · Stripe · Cancel anytime</div>
@@ -932,7 +989,6 @@ function App() {
           <h2 style={{fontSize:"clamp(1rem,3vw,1.3rem)",fontWeight:700,color:"#dde6ff",lineHeight:1.4}}>{deepDiveTopic}</h2>
         </div>
 
-        {/* ── LESSON + PRACTICE ── */}
         {learnMethod==="lesson"&&learnContent&&(
           <div>
             {learnPhase==="content"?(
@@ -953,7 +1009,6 @@ function App() {
           </div>
         )}
 
-        {/* ── STUDY GUIDE + QUIZ ── */}
         {learnMethod==="guide"&&learnContent&&(
           <div>
             {learnPhase==="content"?(
@@ -973,7 +1028,6 @@ function App() {
           </div>
         )}
 
-        {/* ── CONCEPT FLASHCARDS ── */}
         {learnMethod==="flashcard"&&learnCards.length>0&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
@@ -1006,7 +1060,6 @@ function App() {
           </div>
         )}
 
-        {/* ── AI TUTOR ── */}
         {learnMethod==="tutor"&&(
           <div>
             <div style={{...S.card,minHeight:300,maxHeight:450,overflowY:"auto",marginBottom:14,display:"flex",flexDirection:"column",gap:12,padding:16}}>
@@ -1049,7 +1102,7 @@ function App() {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  // DASHBOARD
+  // DASHBOARD — TIER-AWARE WITH DAILY LIMIT BAR
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="dashboard") return (
     <div style={S.page}>
@@ -1057,8 +1110,8 @@ function App() {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0"}}>
           <Logo/>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {isPro?<span style={{fontSize:10,padding:"4px 10px",borderRadius:99,background:"rgba(0,201,167,0.15)",color:"#00C9A7",fontFamily:"monospace"}}>PRO ✦</span>
-              :<button onClick={()=>setScreen("paywall")} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:12,fontWeight:700}}>Upgrade</button>}
+            <span style={{fontSize:10,padding:"4px 10px",borderRadius:99,background:`${tierCfg.color}15`,color:tierCfg.color,fontFamily:"monospace"}}>{tierCfg.label.toUpperCase()}{unlimited?" ✦":""}</span>
+            {tier==="free"&&<button onClick={()=>setScreen("paywall")} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:12,fontWeight:700}}>Upgrade</button>}
             <button onClick={logout} style={{background:"none",border:"none",color:"#4a5a7a",fontSize:12,cursor:"pointer"}}>Log out</button>
           </div>
         </div>
@@ -1084,14 +1137,31 @@ function App() {
           ))}
         </div>
 
-        {!isPro&&(
-          <div style={{...S.card,marginBottom:12,borderColor:hitLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
+        {/* ── TIER-SPECIFIC USAGE BARS ── */}
+        {tier==="free"&&(
+          <div style={{...S.card,marginBottom:12,borderColor:hitFreeLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontSize:12,color:"#8a9dc0"}}>Free questions used</span>
-              <span style={{fontSize:12,color:hitLimit?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>{Math.min(prog.totalAnswered,CONFIG.FREE_LIMIT)}/{CONFIG.FREE_LIMIT}</span>
+              <span style={{fontSize:12,color:hitFreeLimit?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>{Math.min(prog.totalAnswered,CONFIG.FREE_LIMIT)}/{CONFIG.FREE_LIMIT}</span>
             </div>
-            <PBar value={prog.totalAnswered} max={CONFIG.FREE_LIMIT} color={hitLimit?"#FF6F91":"#FFC75F"}/>
-            {hitLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:6,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
+            <PBar value={prog.totalAnswered} max={CONFIG.FREE_LIMIT} color={hitFreeLimit?"#FF6F91":"#FFC75F"}/>
+            {hitFreeLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:6,textAlign:"center"}}>Limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade to continue</span></div>}
+          </div>
+        )}
+        {isPaid&&!unlimited&&(
+          <div style={{...S.card,marginBottom:12,borderColor:hitDailyLimit?"rgba(255,111,145,0.2)":"rgba(255,255,255,0.05)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:12,color:"#8a9dc0"}}>Questions generated today</span>
+              <span style={{fontSize:12,color:hitDailyLimit?"#FF6F91":tierCfg.color,fontFamily:"monospace"}}>{dailyUsed}/{dailyLimit}</span>
+            </div>
+            <PBar value={dailyUsed} max={dailyLimit} color={hitDailyLimit?"#FF6F91":tierCfg.color}/>
+            <div style={{fontSize:10,color:"#2a3a5a",marginTop:5,fontFamily:"monospace"}}>Resets daily · Reviewing existing questions is always free</div>
+            {hitDailyLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:6,textAlign:"center"}}>Daily limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade for more</span></div>}
+          </div>
+        )}
+        {unlimited&&(
+          <div style={{...S.card,marginBottom:12,borderColor:"rgba(255,199,95,0.2)",background:"rgba(255,199,95,0.04)"}}>
+            <div style={{fontSize:12,color:"#FFC75F",fontWeight:700}}>✦ Unlimited — Annual Plan · No daily limits</div>
           </div>
         )}
 
@@ -1106,7 +1176,6 @@ function App() {
           ))}
         </div>
 
-        {/* ── STUDY TAB ── */}
         {tab==="study"&&(
           <div>
             <QTypeSelector/>
@@ -1146,7 +1215,6 @@ function App() {
           </div>
         )}
 
-        {/* ── LEARN TAB ── */}
         {tab==="learn"&&(
           <div>
             <div style={{marginBottom:16}}>
@@ -1187,7 +1255,6 @@ function App() {
           </div>
         )}
 
-        {/* ── DEEP DIVE TAB ── */}
         {tab==="deepdive"&&(
           <div>
             {!activeModule?(
@@ -1248,7 +1315,6 @@ function App() {
                   ))}
                 </div>
 
-                {/* Learn method picker for deep dive */}
                 <div style={{...S.card,marginTop:14,borderColor:"rgba(0,201,167,0.15)"}}>
                   <span style={S.lbl}>Learn Format for this Module</span>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -1267,7 +1333,6 @@ function App() {
           </div>
         )}
 
-        {/* ── MEMORY TAB ── */}
         {tab==="memory"&&(
           <div>
             <span style={S.lbl}>Memory Folders</span>
@@ -1474,7 +1539,6 @@ function App() {
             <Pill color={LEVELS.find(l=>l.id===currentLevel)?.color||"#4D8AF0"}>{LEVELS.find(l=>l.id===currentLevel)?.label}</Pill>
           </div>
 
-          {/* MULTIPLE CHOICE */}
           {(q.type==="mc"||!q.type)&&(
             <div>
               <div style={{fontSize:"clamp(0.93rem,3vw,1.08rem)",lineHeight:1.8,marginBottom:16,color:"#dde6ff"}}>{q.question}</div>
@@ -1491,10 +1555,8 @@ function App() {
             </div>
           )}
 
-          {/* FILL IN THE BLANK */}
           {q.type==="fitb"&&<FITBRenderer q={q} revealed={revealed} fitbAnswer={fitbAnswer} onReveal={handleFITB}/>}
 
-          {/* FREE RESPONSE */}
           {q.type==="free"&&!revealed&&(
             <div>
               <div style={{fontSize:"clamp(0.93rem,3vw,1.08rem)",lineHeight:1.8,marginBottom:14,color:"#dde6ff"}}>{q.question}</div>
@@ -1510,10 +1572,8 @@ function App() {
             </div>
           )}
 
-          {/* EXPLANATION */}
           {revealed&&!gradingLoading&&(
             <div style={{marginTop:14,animation:"fadeUp 0.25s ease"}}>
-              {/* FITB result */}
               {q.type==="fitb"&&(
                 <div style={{...S.card,marginBottom:10,borderColor:fitbCorrect?"rgba(0,201,167,0.3)":"rgba(255,111,145,0.3)",background:fitbCorrect?"rgba(0,201,167,0.05)":"rgba(255,111,145,0.05)"}}>
                   <div style={{fontSize:10,letterSpacing:3,color:fitbCorrect?"#00C9A7":"#FF6F91",textTransform:"uppercase",marginBottom:6,fontFamily:"monospace"}}>{fitbCorrect?"✓ Correct!":"✗ Incorrect"}</div>
@@ -1521,7 +1581,6 @@ function App() {
                   {fitbAnswer&&!fitbCorrect&&<div style={{fontSize:11,color:"#6a7a9a"}}>Your answer: <span style={{color:"#FF6F91"}}>{fitbAnswer}</span></div>}
                 </div>
               )}
-              {/* AI Grade */}
               {q.type==="free"&&aiGrade&&(
                 <div style={{...S.card,marginBottom:10,borderColor:aiGrade.correct===true?"rgba(0,201,167,0.3)":aiGrade.correct===false?"rgba(255,111,145,0.3)":"rgba(255,199,95,0.3)",background:aiGrade.correct===true?"rgba(0,201,167,0.05)":aiGrade.correct===false?"rgba(255,111,145,0.05)":"rgba(255,199,95,0.05)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
@@ -1533,7 +1592,6 @@ function App() {
                   {aiGrade.missedPoints?.length>0&&<div><div style={{fontSize:10,color:"#FF6F91",fontFamily:"monospace",letterSpacing:2,marginBottom:4}}>MISSED</div>{aiGrade.missedPoints.map((s,i)=><div key={i} style={{fontSize:11,color:"#7a5a5a",marginBottom:2}}>• {s}</div>)}</div>}
                 </div>
               )}
-              {/* Model answer */}
               <div style={{...S.card,marginBottom:10,borderColor:"rgba(168,192,255,0.1)"}}>
                 <div style={{fontSize:10,letterSpacing:3,color:"#a8c0ff",textTransform:"uppercase",marginBottom:8,fontFamily:"monospace"}}>{q.type==="free"?"Model Answer":"Explanation"}</div>
                 <p style={{color:"#c0ccee",fontSize:13,lineHeight:1.8,margin:0}}>{q.explanation}</p>
@@ -1565,7 +1623,7 @@ function App() {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  // RESULTS
+  // RESULTS — TIER-AWARE UPGRADE PROMPTS
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="results") return (
     <div style={S.page}>
@@ -1616,11 +1674,25 @@ function App() {
           <button onClick={()=>setScreen("dashboard")} style={{...S.ghostBtn,flex:1}}>Dashboard</button>
         </div>
 
-        {!isPro&&(
+        {tier==="free"&&(
           <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:16}}>
-            <div style={{fontSize:13,color:"#00C9A7",marginBottom:3,fontWeight:700}}>💡 Unlock everything — including AI Tutor</div>
-            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>PA Prep Pro · $14.99/mo or $99/yr</div>
-            <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
+            <div style={{fontSize:13,color:"#00C9A7",marginBottom:3,fontWeight:700}}>💡 Unlock unlimited learning</div>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>Basic $9.99 · Pro $19.99 · Annual $149.99 (Unlimited)</div>
+            <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>Choose a Plan →</button>
+          </div>
+        )}
+        {tier==="basic"&&(
+          <div style={{...S.card,borderColor:"rgba(132,94,194,0.15)",background:"rgba(132,94,194,0.04)",textAlign:"center",padding:16}}>
+            <div style={{fontSize:13,color:"#845EC2",marginBottom:3,fontWeight:700}}>💡 Upgrade to Pro — 200 q/day + AI Tutor</div>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>$19.99/mo · or Annual unlimited at $149.99/yr</div>
+            <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#845EC2,#6a44aa)",color:"#fff",fontSize:13,fontWeight:700}}>Upgrade →</button>
+          </div>
+        )}
+        {tier==="pro"&&(
+          <div style={{...S.card,borderColor:"rgba(255,199,95,0.15)",background:"rgba(255,199,95,0.04)",textAlign:"center",padding:16}}>
+            <div style={{fontSize:13,color:"#FFC75F",marginBottom:3,fontWeight:700}}>✦ Go Annual for Unlimited — $12.50/mo</div>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>$149.99/yr · Save $90 vs monthly Pro</div>
+            <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"inline-block",padding:"10px 22px",borderRadius:10,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:13,fontWeight:700,textDecoration:"none"}}>Get Annual →</a>
           </div>
         )}
       </div>
