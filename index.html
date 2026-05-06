@@ -440,6 +440,12 @@ function App() {
   // ── 4-TIER PRICING STATE ────────────────────────────────────────────────
   const [dailyUsed, setDailyUsed]      = React.useState(()=>getDailyUsed());
 
+  // ── ONBOARDING STATE (moved up to fix Rules of Hooks) ────────────────────
+  const [obStep,setObStep]             = React.useState(0);
+  const [obDegree,setObDegree]         = React.useState("");
+  const [obLevel,setObLevel]           = React.useState("didactic");
+  const [obKnowledge,setObKnowledge]   = React.useState("");
+
   const q = queue[qIdx];
   const tier = getUserTier(user);
   const tierCfg = CONFIG.TIERS[tier] || CONFIG.TIERS.free;
@@ -836,11 +842,6 @@ function App() {
   // ONBOARDING
   // ══════════════════════════════════════════════════════════════════════════
   if(screen==="onboarding") {
-    const [obStep,setObStep]           = React.useState(0);
-    const [obDegree,setObDegree]       = React.useState("");
-    const [obLevel,setObLevel]         = React.useState("didactic");
-    const [obKnowledge,setObKnowledge] = React.useState("");
-
     const knowledgeOptions = [
       {id:"beginner",    label:"Beginner",      icon:"🌱", desc:"Just starting out — need the fundamentals"},
       {id:"intermediate",label:"Intermediate",  icon:"📈", desc:"Know the basics, building deeper knowledge"},
