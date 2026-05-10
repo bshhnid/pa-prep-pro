@@ -486,6 +486,19 @@ function App() {
   React.useEffect(()=>{store.set("paprep_learn",learnBank);},[learnBank]);
   React.useEffect(()=>{if(userProfile)store.set("paprep_profile",userProfile);},[userProfile]);
 
+  // Founder check — auto-upgrade founder accounts to Annual on every load
+  React.useEffect(()=>{
+    if(user && user.email){
+      const founderList = ["bradenschneider@aol.com"];
+      const isFounder = founderList.includes(user.email.toLowerCase().trim());
+      if(isFounder && user.tier !== "annual"){
+        const upgraded = {...user, tier:"annual", pro:true};
+        setUser(upgraded);
+        store.set("paprep_user", upgraded);
+      }
+    }
+  },[user?.email]);
+
   React.useEffect(()=>{
     if(screen!=="quiz"||studyMode!=="exam"||!examStarted||timeLeft===null)return;
     if(timeLeft<=0){endSession();return;}
@@ -502,10 +515,19 @@ function App() {
     }
   },[bank.length,bgFill,currentLevel]);
 
+  // Founder emails — auto-set to Annual tier on login (full access for owners)
+  const FOUNDER_EMAILS = ["bradenschneider@aol.com"];
+
   const handleAuth=()=>{
     if(!form.email||!form.password){setFormErr("Please fill in all fields.");return;}
     if(authMode==="signup"&&!form.name){setFormErr("Please enter your name.");return;}
-    const u={name:form.name||form.email.split("@")[0],email:form.email,pro:false,tier:"free"};
+    const isFounder = FOUNDER_EMAILS.includes(form.email.toLowerCase().trim());
+    const u={
+      name:form.name||form.email.split("@")[0],
+      email:form.email,
+      pro:isFounder,
+      tier:isFounder?"annual":"free"
+    };
     setUser(u);setFormErr("");
     if(!store.get("paprep_profile")){setScreen("onboarding");}
     else{setScreen("dashboard");}
