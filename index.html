@@ -36,8 +36,8 @@ const CONFIG = {
   TIERS: {
     free:   {label:"Free",   dailyLimit:10,  color:"#6a7a9a", unlimited:false},
     basic:  {label:"Basic",  dailyLimit:75,  color:"#00C9A7", unlimited:false},
-    pro:    {label:"Pro",    dailyLimit:200, color:"#845EC2", unlimited:false},
-    annual: {label:"Annual", dailyLimit:300, color:"#FFC75F", unlimited:true},
+    pro:    {label:"Pro",    dailyLimit:100, color:"#845EC2", unlimited:false},
+    annual: {label:"Annual", dailyLimit:150, color:"#FFC75F", unlimited:true},
   },
   MONTHLY_LINK: "https://buy.stripe.com/5kQ14n0N9aEI3jCey74ZG05",
   YEARLY_LINK:  "https://buy.stripe.com/28E6oHbrNcMQ3jC0Hh4ZG04",
@@ -203,20 +203,30 @@ const SEED_QUESTIONS = [
 ];
 
 // ─── AI CALLS ─────────────────────────────────────────────────────────────────
-const callAI = async(prompt, maxTokens=4000) => {
+// Simple tier-based model selection
+// Free/Basic → Haiku 4.5 ($1/$5 per MTok) — fast, cheap, plenty good
+// Pro/Annual → Sonnet 4.5 ($3/$15) — sharper clinical vignettes, better explanations
+// Worth the cost: paid users notice quality, and quality drives retention
+const MODELS = {
+  haiku:  "claude-haiku-4-5-20251001",
+  sonnet: "claude-sonnet-4-5",
+};
+const pickModel = (tier) => (tier==="pro"||tier==="annual") ? MODELS.sonnet : MODELS.haiku;
+
+const callAI = async(prompt, maxTokens=4000, model=MODELS.haiku) => {
   const apiKey = CONFIG.ANTHROPIC_KEY;
   if(!apiKey||apiKey==="YOUR_ANTHROPIC_API_KEY_HERE") return null;
   const res = await fetch("https://api.anthropic.com/v1/messages",{
     method:"POST",
     headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTokens,messages:[{role:"user",content:prompt}]})
+    body:JSON.stringify({model,max_tokens:maxTokens,messages:[{role:"user",content:prompt}]})
   });
   const data = await res.json();
   return data.content?.find(b=>b.type==="text")?.text||null;
 };
 
 // Generate lesson content
-const generateLesson = async(topic, level, method) => {
+const generateLesson = async(topic, level, method, tier="free") => {
   const levelCtx = LEVELS.find(l=>l.id===level);
   const prompts = {
     lesson: `You are an expert PA school educator. Create a focused lesson on "${topic}" for a ${levelCtx.label} level student (${levelCtx.desc}).
@@ -260,7 +270,7 @@ Be conversational, encouraging, and appropriately detailed for their level. Use 
   };
 
   try {
-    const text = await callAI(prompts[method]||prompts.lesson, method==="guide"?6000:3000);
+    const text = await callAI(prompts[method]||prompts.lesson, method==="guide"?6000:3000, pickModel(tier));
     if(!text) return null;
     if(method==="flashcard"){
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
@@ -270,8 +280,8 @@ Be conversational, encouraging, and appropriately detailed for their level. Use 
   } catch(e) { return null; }
 };
 
-// Generate questions
-const generateQuestions = async({subject,difficulty,count=10,questionType="mixed",topic="",level="didactic",examType="",used=[]}) => {
+// Generate questions — count default raised to 20 for better economics (same prompt overhead)
+const generateQuestions = async({subject,difficulty,count=20,questionType="mixed",topic="",level="didactic",examType="",used=[],tier="free"}) => {
   const levelCtx = LEVELS.find(l=>l.id===level)||LEVELS[1];
   const recentQ = used.slice(-8).map(q=>q.question).join("; ");
 
@@ -299,7 +309,7 @@ FORMAT — return ONLY valid JSON array:
 wrongExplanations array: 4 entries, correct answer entry = "".`;
 
   try {
-    const text = await callAI(prompt);
+    const text = await callAI(prompt, 4000, pickModel(tier));
     if(!text) return [];
     const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
     return parsed.map((q,i)=>({...q,id:Date.now()+i,ai:true}));
@@ -307,7 +317,7 @@ wrongExplanations array: 4 entries, correct answer entry = "".`;
 };
 
 // Grade free response
-const gradeResponse = async(question, modelAnswer, keyPoints, userAnswer) => {
+const gradeResponse = async(question, modelAnswer, keyPoints, userAnswer, tier="free") => {
   const prompt = `You are a PA school professor grading a student's free response.
 Question: ${question}
 Model Answer: ${modelAnswer}
@@ -318,14 +328,14 @@ Return ONLY valid JSON:
 {"score":85,"grade":"B","correct":true,"feedback":"2-3 sentence personalized feedback","missedPoints":["missed items"],"strengths":["strengths"]}
 correct = true if score >= 70.`;
   try {
-    const text = await callAI(prompt, 600);
+    const text = await callAI(prompt, 600, pickModel(tier));
     if(!text) return {score:null,feedback:"Add API key for AI grading.",correct:null};
     return JSON.parse(text.replace(/```json|```/g,"").trim());
   } catch(e) { return {score:null,feedback:"Could not grade response.",correct:null}; }
 };
 
 // AI Tutor chat response
-const tutorChat = async(topic, level, history, userMessage) => {
+const tutorChat = async(topic, level, history, userMessage, tier="free") => {
   const levelCtx = LEVELS.find(l=>l.id===level)||LEVELS[1];
   const historyText = history.map(h=>`${h.role==="user"?"Student":"Tutor"}: ${h.content}`).join("\n");
   const prompt = `You are an expert, friendly PA school tutor helping a ${levelCtx.label} level student learn about "${topic}".
@@ -336,7 +346,7 @@ Student: ${userMessage}
 
 Respond as a knowledgeable, encouraging tutor. Be conversational. Explain concepts clearly at the ${levelCtx.label} level. Use clinical examples. Keep responses focused (3-5 sentences unless a detailed explanation is needed). End with a question or offer to explore a specific aspect if it helps the conversation.`;
   try {
-    const text = await callAI(prompt, 1000);
+    const text = await callAI(prompt, 1000, pickModel(tier));
     return text||"I couldn't generate a response. Please check your API key.";
   } catch(e) { return "Something went wrong. Please try again."; }
 };
@@ -486,7 +496,7 @@ function App() {
   React.useEffect(()=>{
     if(bank.length<80&&!bgFill&&CONFIG.ANTHROPIC_KEY!=="YOUR_ANTHROPIC_API_KEY_HERE"){
       setBgFill(true);
-      Promise.all(SUBJECTS.slice(1).flatMap(s=>["mc","fitb"].map(t=>generateQuestions({subject:s,difficulty:"Medium",count:2,questionType:t,level:currentLevel,used:bank}))))
+      Promise.all(SUBJECTS.slice(1).flatMap(s=>["mc","fitb"].map(t=>generateQuestions({subject:s,difficulty:"Medium",count:2,questionType:t,level:currentLevel,used:bank,tier}))))
         .then(r=>{const nq=r.flat().map((q,i)=>({...q,id:Date.now()+i}));setBank(b=>[...b,...nq]);})
         .finally(()=>setBgFill(false));
     }
@@ -531,7 +541,7 @@ function App() {
       const ai=await generateQuestions({
         subject,difficulty:difficulty==="All"?adaptDiff:difficulty,
         count:Math.max(needed,8),questionType,
-        topic:ddTopic||cTopic||"",level:currentLevel,examType:eType,used:bank
+        topic:ddTopic||cTopic||"",level:currentLevel,examType:eType,used:bank,tier
       });
       const withIds=ai.map((q,i)=>({...q,id:Date.now()+i}));
       setBank(b=>[...b,...withIds]);
@@ -564,15 +574,15 @@ function App() {
     setLoading(true);setLoadMsg(`Generating ${method==="tutor"?"AI tutor session":method==="guide"?"study guide":method==="flashcard"?"concept cards":"lesson"} on "${topic}"…`);
     try{
       if(method==="flashcard"){
-        const cards=await generateLesson(topic,currentLevel,"flashcard");
+        const cards=await generateLesson(topic,currentLevel,"flashcard",tier);
         if(cards&&cards.length){setLearnCards(cards);setDeepDiveTopic(topic);setScreen("learn");}
         else{setLoadMsg("Could not generate cards. Check API key.");setTimeout(()=>setScreen("dashboard"),2500);}
       }else if(method==="tutor"){
-        const intro=await generateLesson(topic,currentLevel,"tutor");
+        const intro=await generateLesson(topic,currentLevel,"tutor",tier);
         setTutorHistory([{role:"assistant",content:intro||`Let's learn about ${topic}! What would you like to start with?`}]);
         setDeepDiveTopic(topic);setScreen("learn");
       }else{
-        const content=await generateLesson(topic,currentLevel,method);
+        const content=await generateLesson(topic,currentLevel,method,tier);
         if(content){setLearnContent(content);setDeepDiveTopic(topic);setScreen("learn");}
         else{setLoadMsg("Could not generate content. Check API key.");setTimeout(()=>setScreen("dashboard"),2500);}
       }
@@ -586,7 +596,7 @@ function App() {
     const newHistory=[...tutorHistory,{role:"user",content:msg}];
     setTutorHistory(newHistory);setTutorLoading(true);
     try{
-      const response=await tutorChat(deepDiveTopic,currentLevel,newHistory,msg);
+      const response=await tutorChat(deepDiveTopic,currentLevel,newHistory,msg,tier);
       setTutorHistory(h=>[...h,{role:"assistant",content:response}]);
     }catch(e){setTutorHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong. Please try again."}]);}
     finally{setTutorLoading(false);}
@@ -607,7 +617,7 @@ function App() {
     if(revealed||!q)return;
     setFreeText(text);setGradingLoading(true);
     try{
-      const grade=await gradeResponse(q.question,q.explanation,q.keyPoints,text);
+      const grade=await gradeResponse(q.question,q.explanation,q.keyPoints,text,tier);
       setAiGrade(grade);setRevealed(true);recordAnswer(grade.correct);
     }catch(e){setAiGrade({score:null,feedback:"Could not grade.",correct:null});setRevealed(true);recordAnswer(null);}
     finally{setGradingLoading(false);}
@@ -765,7 +775,7 @@ function App() {
           <div style={S.card}>
             <div style={{fontSize:11,color:"#6a7a9a",marginBottom:6,fontFamily:"monospace"}}>FREE</div>
             <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$0</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>10 questions total</div>
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>10 fresh AI questions to try</div>
             {["All question types","Full explanations","Learn mode preview"].map(f=>(
               <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
@@ -773,8 +783,8 @@ function App() {
           <div style={{...S.card,borderColor:"rgba(0,201,167,0.25)"}}>
             <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>BASIC</div>
             <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$9.99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>/mo · 75 q/day</div>
-            {["75 questions per day","All study modes","Deep Dive modules","Learn mode access"].map(f=>(
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>/mo · 75 new AI questions/day</div>
+            {["75 fresh AI questions daily","Unlimited review of past questions","All study modes","Deep Dive modules","Learn mode access"].map(f=>(
               <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#00C9A7"}}>✓</span>{f}</div>
             ))}
             <a href={CONFIG.STRIPE.basic} target="_blank" rel="noreferrer" onClick={()=>activateTier("basic")} style={{display:"block",marginTop:10,padding:"8px",borderRadius:8,background:"rgba(0,201,167,0.1)",border:"1px solid rgba(0,201,167,0.3)",color:"#00C9A7",fontSize:12,textDecoration:"none",textAlign:"center",fontWeight:700}}>Get Basic →</a>
@@ -783,8 +793,8 @@ function App() {
             <div style={{position:"absolute",top:-11,right:12,fontSize:10,background:"#845EC2",color:"#fff",padding:"3px 10px",borderRadius:99,fontWeight:700}}>POPULAR</div>
             <div style={{fontSize:11,color:"#845EC2",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
             <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$19.99</div>
-            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>/mo · 200 q/day</div>
-            {["200 questions per day","AI Tutor","AI grading","Adaptive difficulty","Board-style exams"].map(f=>(
+            <div style={{fontSize:11,color:"#3a4a6a",marginBottom:10}}>/mo · 100 new AI questions/day</div>
+            {["100 fresh AI questions daily","Unlimited review of past questions","AI Tutor","AI grading","Adaptive difficulty","Board-style exams"].map(f=>(
               <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#845EC2"}}>✓</span>{f}</div>
             ))}
             <a href={CONFIG.STRIPE.pro} target="_blank" rel="noreferrer" onClick={()=>activateTier("pro")} style={{display:"block",marginTop:10,padding:"8px",borderRadius:8,background:"linear-gradient(135deg,#845EC2,#6a44aa)",color:"#fff",fontSize:12,textDecoration:"none",textAlign:"center",fontWeight:700}}>Get Pro →</a>
@@ -795,7 +805,7 @@ function App() {
             <div style={{fontSize:24,fontWeight:700,color:"#dde6ff"}}>$149.99</div>
             <div style={{fontSize:11,color:"#FFC75F",marginBottom:2}}>/yr · $12.50/mo</div>
             <div style={{fontSize:10,color:"#3a4a6a",marginBottom:10}}>Save $90 vs monthly</div>
-            {["Unlimited questions","Everything in Pro","Best for boards"].map(f=>(
+            {["150 fresh AI questions daily","Unlimited review of past questions","Everything in Pro","Best for board prep"].map(f=>(
               <div key={f} style={{fontSize:11,color:"#5a6d94",marginBottom:4,display:"flex",gap:6}}><span style={{color:"#FFC75F"}}>✓</span>{f}</div>
             ))}
             <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"block",marginTop:10,padding:"8px",borderRadius:8,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:12,textDecoration:"none",textAlign:"center",fontWeight:700}}>Get Annual →</a>
@@ -937,7 +947,7 @@ function App() {
             {hitFreeLimit?"You've used your 10 free questions":hitDailyLimit?`Daily limit reached (${dailyLimit} questions)`:"Upgrade to continue"}
           </h2>
           <p style={{color:"#4a5a7a",fontSize:13,lineHeight:1.7,margin:"0 auto 20px",maxWidth:360}}>
-            {tier==="basic"?"Upgrade to Pro for 200 q/day + AI Tutor, or Annual for unlimited.":tier==="pro"?"Go Annual for unlimited questions at $12.50/month.":"Choose a plan to unlock full access."}
+            {tier==="basic"?"Upgrade to Pro for 100 fresh AI questions/day + AI Tutor, or Annual for the most.":tier==="pro"?"Go Annual for 150 fresh questions/day at $12.42/month.":"Choose a plan to unlock full access."}
           </p>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -945,7 +955,7 @@ function App() {
             <div style={{...S.card,padding:18,textAlign:"center",borderColor:"rgba(0,201,167,0.25)"}}>
               <div style={{fontSize:11,color:"#00C9A7",marginBottom:6,fontFamily:"monospace"}}>BASIC</div>
               <div style={{fontSize:22,fontWeight:700,color:"#dde6ff"}}>$9.99</div>
-              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · 75 q/day</div>
+              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · 75 new AI questions/day<br/>+ unlimited review</div>
               <a href={CONFIG.STRIPE.basic} target="_blank" rel="noreferrer" onClick={()=>activateTier("basic")} style={{display:"block",padding:"10px",borderRadius:9,background:"rgba(0,201,167,0.1)",border:"1px solid rgba(0,201,167,0.3)",color:"#00C9A7",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Basic →</a>
             </div>
           )}
@@ -953,7 +963,7 @@ function App() {
             <div style={{...S.card,padding:18,textAlign:"center",border:"1px solid rgba(132,94,194,0.3)",background:"rgba(132,94,194,0.05)"}}>
               <div style={{fontSize:11,color:"#845EC2",marginBottom:6,fontFamily:"monospace"}}>PRO</div>
               <div style={{fontSize:22,fontWeight:700,color:"#dde6ff"}}>$19.99</div>
-              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · 200 q/day</div>
+              <div style={{fontSize:11,color:"#3a4a6a",marginBottom:12}}>/mo · 100 new AI questions/day<br/>+ unlimited review</div>
               <a href={CONFIG.STRIPE.pro} target="_blank" rel="noreferrer" onClick={()=>activateTier("pro")} style={{display:"block",padding:"10px",borderRadius:9,background:"linear-gradient(135deg,#845EC2,#6a44aa)",color:"#fff",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Pro →</a>
             </div>
           )}
@@ -961,8 +971,8 @@ function App() {
             <div style={{position:"absolute",top:-11,left:"50%",transform:"translateX(-50%)",fontSize:10,background:"#FFC75F",color:"#000",padding:"3px 10px",borderRadius:99,fontWeight:700,whiteSpace:"nowrap"}}>BEST VALUE · UNLIMITED</div>
             <div style={{fontSize:11,color:"#FFC75F",marginBottom:6,fontFamily:"monospace"}}>ANNUAL</div>
             <div style={{fontSize:22,fontWeight:700,color:"#dde6ff"}}>$149.99</div>
-            <div style={{fontSize:11,color:"#FFC75F",marginBottom:12}}>/yr · $12.50/mo · Unlimited</div>
-            <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"block",padding:"10px",borderRadius:9,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Annual — Unlimited →</a>
+            <div style={{fontSize:11,color:"#FFC75F",marginBottom:12}}>/yr · $12.50/mo · 150 daily + unlimited review</div>
+            <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"block",padding:"10px",borderRadius:9,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:12,textDecoration:"none",fontWeight:700}}>Get Annual →</a>
           </div>
         </div>
         <div style={{fontSize:11,color:"#2a3a5a",textAlign:"center",marginBottom:14}}>Secure · Stripe · Cancel anytime</div>
@@ -1142,7 +1152,7 @@ function App() {
         {tier==="free"&&(
           <div style={{...S.card,marginBottom:12,borderColor:hitFreeLimit?"rgba(255,111,145,0.25)":"rgba(255,199,95,0.15)"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontSize:12,color:"#8a9dc0"}}>Free questions used</span>
+              <span style={{fontSize:12,color:"#8a9dc0"}}>Fresh AI questions used</span>
               <span style={{fontSize:12,color:hitFreeLimit?"#FF6F91":"#FFC75F",fontFamily:"monospace"}}>{Math.min(prog.totalAnswered,CONFIG.FREE_LIMIT)}/{CONFIG.FREE_LIMIT}</span>
             </div>
             <PBar value={prog.totalAnswered} max={CONFIG.FREE_LIMIT} color={hitFreeLimit?"#FF6F91":"#FFC75F"}/>
@@ -1152,17 +1162,17 @@ function App() {
         {isPaid&&!unlimited&&(
           <div style={{...S.card,marginBottom:12,borderColor:hitDailyLimit?"rgba(255,111,145,0.2)":"rgba(255,255,255,0.05)"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontSize:12,color:"#8a9dc0"}}>Questions generated today</span>
+              <span style={{fontSize:12,color:"#8a9dc0"}}>New AI questions today</span>
               <span style={{fontSize:12,color:hitDailyLimit?"#FF6F91":tierCfg.color,fontFamily:"monospace"}}>{dailyUsed}/{dailyLimit}</span>
             </div>
             <PBar value={dailyUsed} max={dailyLimit} color={hitDailyLimit?"#FF6F91":tierCfg.color}/>
-            <div style={{fontSize:10,color:"#2a3a5a",marginTop:5,fontFamily:"monospace"}}>Resets daily · Reviewing existing questions is always free</div>
+            <div style={{fontSize:10,color:"#2a3a5a",marginTop:5,fontFamily:"monospace"}}>Resets daily at midnight · Reviewing past questions is always unlimited & free</div>
             {hitDailyLimit&&<div style={{fontSize:11,color:"#FF6F91",marginTop:6,textAlign:"center"}}>Daily limit reached — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={()=>setScreen("paywall")}>upgrade for more</span></div>}
           </div>
         )}
         {unlimited&&(
           <div style={{...S.card,marginBottom:12,borderColor:"rgba(255,199,95,0.2)",background:"rgba(255,199,95,0.04)"}}>
-            <div style={{fontSize:12,color:"#FFC75F",fontWeight:700}}>✦ Unlimited — Annual Plan · No daily limits</div>
+            <div style={{fontSize:12,color:"#FFC75F",fontWeight:700}}>✦ Annual Plan · 150 fresh AI questions daily + unlimited review of past questions</div>
           </div>
         )}
 
@@ -1678,20 +1688,20 @@ function App() {
         {tier==="free"&&(
           <div style={{...S.card,borderColor:"rgba(0,201,167,0.15)",background:"rgba(0,201,167,0.04)",textAlign:"center",padding:16}}>
             <div style={{fontSize:13,color:"#00C9A7",marginBottom:3,fontWeight:700}}>💡 Unlock unlimited learning</div>
-            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>Basic $9.99 · Pro $19.99 · Annual $149.99 (Unlimited)</div>
+            <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>Basic 75/day · Pro 100/day · Annual 150/day · Unlimited review on all</div>
             <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#00C9A7,#009d84)",color:"#fff",fontSize:13,fontWeight:700}}>Choose a Plan →</button>
           </div>
         )}
         {tier==="basic"&&(
           <div style={{...S.card,borderColor:"rgba(132,94,194,0.15)",background:"rgba(132,94,194,0.04)",textAlign:"center",padding:16}}>
-            <div style={{fontSize:13,color:"#845EC2",marginBottom:3,fontWeight:700}}>💡 Upgrade to Pro — 200 q/day + AI Tutor</div>
+            <div style={{fontSize:13,color:"#845EC2",marginBottom:3,fontWeight:700}}>💡 Upgrade to Pro — 100 fresh AI questions daily + AI Tutor</div>
             <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>$19.99/mo · or Annual unlimited at $149.99/yr</div>
             <button onClick={()=>setScreen("paywall")} style={{padding:"10px 22px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#845EC2,#6a44aa)",color:"#fff",fontSize:13,fontWeight:700}}>Upgrade →</button>
           </div>
         )}
         {tier==="pro"&&(
           <div style={{...S.card,borderColor:"rgba(255,199,95,0.15)",background:"rgba(255,199,95,0.04)",textAlign:"center",padding:16}}>
-            <div style={{fontSize:13,color:"#FFC75F",marginBottom:3,fontWeight:700}}>✦ Go Annual for Unlimited — $12.50/mo</div>
+            <div style={{fontSize:13,color:"#FFC75F",marginBottom:3,fontWeight:700}}>✦ Go Annual for 150 daily AI questions — $12.42/mo</div>
             <div style={{fontSize:11,color:"#4a5a7a",marginBottom:10}}>$149.99/yr · Save $90 vs monthly Pro</div>
             <a href={CONFIG.STRIPE.annual} target="_blank" rel="noreferrer" onClick={()=>activateTier("annual")} style={{display:"inline-block",padding:"10px 22px",borderRadius:10,background:"linear-gradient(135deg,#FFC75F,#e6a800)",color:"#000",fontSize:13,fontWeight:700,textDecoration:"none"}}>Get Annual →</a>
           </div>
